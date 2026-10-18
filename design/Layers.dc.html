@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Loam sampler — layers and mapping</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0E0F11}
+a{color:#F0A23B}a:hover{color:#FFC371}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 1280px; height: 920px; box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: #0E0F11; font-family: 'Barlow', system-ui, sans-serif; color: #ECE9E2">
+
+<header style="height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 6px">
+<div style="display: flex; align-items: center; gap: 12px">
+<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#1C1F22" stroke="#33373C"></rect><path d="M7 11 C11 9 15 13 23 10" fill="none" stroke="{{accent}}" stroke-width="2" stroke-linecap="round"></path><path d="M7 16 C12 14 17 18 23 15" fill="none" stroke="{{accent}}" stroke-opacity=".7" stroke-width="2" stroke-linecap="round"></path><path d="M7 21 C11 19 16 23 23 20" fill="none" stroke="{{modAccent}}" stroke-width="2" stroke-linecap="round"></path></svg>
+<div style="display: flex; align-items: baseline; gap: 10px">
+<span style="font-size: 22px; font-weight: 700; letter-spacing: .22em">LOAM</span>
+<span style="font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #9AA0A6">Sample Sculptor</span>
+</div>
+<nav aria-label="Pages" style="display: flex; gap: 2px; margin-left: 12px; background: #17191C; border: 1px solid #26292D; border-radius: 7px; padding: 2px">
+<a href="Main.dc.html" style="height: 28px; padding: 0 14px; display: flex; align-items: center; border-radius: 5px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-decoration: none; background: transparent; color: #C9CCD0">Main</a>
+<a href="Layers.dc.html" aria-current="page" style="height: 28px; padding: 0 14px; display: flex; align-items: center; border-radius: 5px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-decoration: none; background: #2A2D31; color: #ECE9E2">Layers</a>
+</nav>
+</div>
+<div style="display: flex; align-items: center; gap: 6px; background: #17191C; border: 1px solid #26292D; border-radius: 8px; padding: 4px; width: 340px">
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; line-height: 1.15">
+<span style="font-size: 14px; font-weight: 600">Amber Dust</span>
+<span style="font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #9AA0A6">14 layers · 38 samples · 212 MB</span>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 8px">
+<button style="height: 32px; border: 1px solid #33373C; border-radius: 6px; background: #202327; color: #ECE9E2; padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; cursor: pointer">Import folder…</button>
+<button style="height: 32px; border: 1px solid #33373C; border-radius: 6px; background: #202327; color: #ECE9E2; padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; cursor: pointer">Auto-map by name</button>
+<button style="height: 32px; border: 0; border-radius: 6px; background: {{accent}}; color: #111315; padding: 0 14px; font-size: 12px; font-weight: 700; letter-spacing: .04em; cursor: pointer">+ Add layer</button>
+</div>
+</header>
+
+<div style="flex: 1; min-height: 0; display: flex; gap: 12px">
+
+<!-- LEFT COLUMN -->
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+
+<!-- KEY / VELOCITY MAP -->
+<section aria-label="Key and velocity map" style="height: 392px; flex-shrink: 0; box-sizing: border-box; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Key / Velocity Map</h2>
+<div role="group" aria-label="Show group" style="display: flex; gap: 2px; background: #111315; border: 1px solid #26292D; border-radius: 6px; padding: 2px">
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+<button aria-pressed="{{g.on}}" onClick="{{g.pick}}" style="height: 22px; padding: 0 10px; border: 0; border-radius: 4px; font-size: 11.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; background: {{g.bg}}; color: {{g.fg}}">{{g.label}}<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; opacity: .8">{{g.count}}</span></button>
+</sc-for>
+</div>
+<div style="display: flex; gap: 6px">
+<button style="height: 24px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; padding: 0 9px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer">Fill gaps</button>
+<button style="height: 24px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; padding: 0 9px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer">Snap: semitone</button>
+</div>
+</div>
+
+<div style="flex: 1; min-height: 0; display: flex; gap: 8px">
+<div aria-hidden="true" style="width: 26px; display: flex; flex-direction: column; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #80868C; text-align: right; padding-bottom: 50px">
+<span>127</span><span>96</span><span>64</span><span>32</span><span>0</span>
+</div>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<div style="flex: 1; position: relative; background: #111315; border: 1px solid #23262A; border-radius: 6px; overflow: hidden">
+<sc-for list="{{octLines}}" as="o" hint-placeholder-count="7">
+<div aria-hidden="true" style="position: absolute; top: 0; bottom: 0; width: 1px; background: #202327; left: {{o.left}}%"></div>
+</sc-for>
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; height: 1px; top: 25%; background: #1C1F22"></div>
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; height: 1px; top: 50%; background: #1C1F22"></div>
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; height: 1px; top: 75%; background: #1C1F22"></div>
+<sc-for list="{{zones}}" as="z" hint-placeholder-count="12">
+<button aria-label="{{z.aria}}" aria-pressed="{{z.on}}" onClick="{{z.pick}}" style="position: absolute; box-sizing: border-box; padding: 4px 5px; margin: 0; border-radius: 3px; cursor: pointer; text-align: left; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; left: {{z.left}}%; width: {{z.width}}%; top: {{z.top}}%; height: {{z.height}}%; background: {{z.fill}}; border: {{z.bw}}px solid {{z.bd}}; z-index: {{z.z}}; color: {{z.fg}}">
+<span style="font-size: 11px; font-weight: 600; white-space: nowrap">{{z.label}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; white-space: nowrap; opacity: .85">{{z.rr}}</span>
+</button>
+</sc-for>
+</div>
+<div aria-hidden="true" style="height: 34px; flex-shrink: 0; position: relative; display: flex; border-radius: 3px; overflow: hidden; background: #B9B5AC">
+<sc-for list="{{whites}}" as="w" hint-placeholder-count="56">
+<div style="flex: 1; min-width: 0; border-right: 1px solid #B9B5AC; background: {{w.bg}}"></div>
+</sc-for>
+<sc-for list="{{blacks}}" as="b" hint-placeholder-count="40">
+<div style="position: absolute; top: 0; height: 58%; border-radius: 0 0 2px 2px; left: {{b.left}}%; width: {{b.w}}%; background: {{b.bg}}"></div>
+</sc-for>
+</div>
+<div aria-hidden="true" style="height: 12px; position: relative; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #80868C">
+<sc-for list="{{octLabels}}" as="o" hint-placeholder-count="8">
+<span style="position: absolute; top: 0; left: {{o.left}}%">{{o.label}}</span>
+</sc-for>
+</div>
+</div>
+</div>
+</section>
+
+<!-- LAYER TABLE -->
+<section aria-label="Layer list" style="flex: 1; min-height: 0; box-sizing: border-box; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="height: 22px; display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">All Layers</h2>
+<div style="display: flex; gap: 6px">
+<button style="height: 22px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; padding: 0 9px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer">Duplicate</button>
+<button style="height: 22px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; padding: 0 9px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer">Group</button>
+<button style="height: 22px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; padding: 0 9px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer">Delete</button>
+</div>
+</div>
+<div style="flex: 1; min-height: 0; overflow: auto; border: 1px solid #23262A; border-radius: 6px; background: #141618">
+<table style="width: 100%; border-collapse: collapse; font-size: 12px">
+<thead>
+<tr style="text-align: left; color: #9AA0A6; font-size: 10px; letter-spacing: .12em; text-transform: uppercase">
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600; width: 28px">#</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600">Layer</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600">Group</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600">Keys</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600">Root</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600">Velocity</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600">RR</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600">Vol</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600">Pan</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600">Out</th>
+<th style="position: sticky; top: 0; background: #1A1C1F; padding: 7px 8px; font-weight: 600; width: 56px"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Mute and solo</span></th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+<tr style="border-top: 1px solid #202327; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #C9CCD0; background: {{r.bg}}">
+<td style="padding: 0 8px; height: 30px; color: #80868C">{{r.num}}</td>
+<td style="padding: 0 8px"><button onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="border: 0; background: transparent; padding: 0; cursor: pointer; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600; color: {{r.nameFg}}">{{r.name}}</button></td>
+<td style="padding: 0 8px; font-family: 'Barlow', sans-serif; font-size: 12px; color: #9AA0A6">{{r.group}}</td>
+<td style="padding: 0 8px">{{r.keys}}</td>
+<td style="padding: 0 8px">{{r.root}}</td>
+<td style="padding: 0 8px">{{r.vel}}</td>
+<td style="padding: 0 8px">{{r.rr}}</td>
+<td style="padding: 0 8px">{{r.vol}}</td>
+<td style="padding: 0 8px">{{r.pan}}</td>
+<td style="padding: 0 8px">{{r.out}}</td>
+<td style="padding: 0 8px"><div style="display: flex; gap: 4px"><button aria-label="Mute layer" aria-pressed="{{r.muted}}" style="width: 22px; height: 20px; border: 1px solid #33373C; border-radius: 3px; font-size: 10px; font-weight: 700; cursor: pointer; background: {{r.muteBg}}; color: {{r.muteFg}}">M</button><button aria-label="Solo layer" style="width: 22px; height: 20px; border: 1px solid #33373C; border-radius: 3px; background: #202327; color: #C9CCD0; font-size: 10px; font-weight: 700; cursor: pointer">S</button></div></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<!-- ROUND ROBIN + VELOCITY CURVE -->
+<div style="height: 150px; flex-shrink: 0; display: flex; gap: 12px">
+<section aria-label="Round robin variations" style="flex: 1; min-width: 0; box-sizing: border-box; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 22px; display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<div style="display: flex; align-items: baseline; gap: 10px; min-width: 0">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Round Robin</h2>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #9AA0A6; white-space: nowrap">{{rrSummary}}</span>
+</div>
+<button onClick="{{audition}}" style="height: 24px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #ECE9E2; padding: 0 10px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; gap: 6px"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1 L9 5 L2 9 Z" fill="currentColor"></path></svg>Audition next</button>
+</div>
+<div style="flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{rrSlots}}" as="r" hint-placeholder-count="3">
+<div style="border-radius: 6px; background: #111315; border: 1px solid {{r.bd}}; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<span style="font-size: 11px; font-weight: 700; letter-spacing: .08em; color: {{r.labelFg}}">{{r.label}}</span>
+<sc-if value="{{r.next}}" hint-placeholder-val="{{ false }}"><span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; background: {{accent}}; color: #111315; border-radius: 3px; padding: 0 4px">last played</span></sc-if>
+</div>
+<svg viewBox="0 0 200 44" preserveAspectRatio="none" width="100%" height="34" style="display: block" aria-hidden="true"><path d="{{r.path}}" fill="{{r.color}}"></path></svg>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: #9AA0A6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.file}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-label="Velocity curve" style="width: 320px; flex-shrink: 0; box-sizing: border-box; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 22px; display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Velocity Curve</h2>
+<div role="group" aria-label="Curve preset" style="display: flex; gap: 2px">
+<sc-for list="{{curves}}" as="c" hint-placeholder-count="4">
+<button aria-pressed="{{c.on}}" onClick="{{c.pick}}" style="height: 22px; padding: 0 7px; border: 0; border-radius: 4px; font-size: 10.5px; font-weight: 600; cursor: pointer; background: {{c.bg}}; color: {{c.fg}}">{{c.label}}</button>
+</sc-for>
+</div>
+</div>
+<div style="flex: 1; display: flex; gap: 8px">
+<div style="flex: 1; position: relative; border-radius: 6px; background: #111315; border: 1px solid #23262A; overflow: hidden">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%" style="display: block" role="img" aria-label="Velocity response curve">
+<path d="M25 0 V100 M50 0 V100 M75 0 V100 M0 25 H100 M0 50 H100 M0 75 H100" stroke="#1E2124" stroke-width="1" vector-effect="non-scaling-stroke"></path>
+<path d="M0 100 L100 0" stroke="#2C3035" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"></path>
+<path d="{{curvePath}}" fill="none" stroke="{{accent}}" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+<div style="width: 64px; display: flex; flex-direction: column; justify-content: space-between">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #9AA0A6">In</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">96</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #9AA0A6">Out</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">{{curveOut}}</span></div>
+</div>
+</div>
+</section>
+</div>
+</div>
+
+<!-- INSPECTOR -->
+<aside aria-label="Layer inspector" style="width: 360px; flex-shrink: 0; box-sizing: border-box; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 32px; height: 32px; flex-shrink: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; background: {{selColor}}; color: #111315">{{selNum}}</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{selName}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #9AA0A6; white-space: nowrap">{{selGroup}} · {{selFile}}</span>
+</div>
+<button aria-label="Previous layer" onClick="{{prev}}" style="width: 28px; height: 28px; border: 1px solid #33373C; border-radius: 5px; background: #202327; color: #C9CCD0; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2 L4 7 L9 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<button aria-label="Next layer" onClick="{{next}}" style="width: 28px; height: 28px; border: 1px solid #33373C; border-radius: 5px; background: #202327; color: #C9CCD0; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2 L10 7 L5 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">MIDI Mapping</h3>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{mapFields}}" as="f" hint-placeholder-count="8">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; white-space: nowrap">{{f.label}}</span>
+<span style="height: 26px; box-sizing: border-box; border-radius: 4px; background: #111315; border: 1px solid #2C3035; display: flex; align-items: center; padding: 0 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px">{{f.value}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 6px">
+<button style="flex: 1; height: 26px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; font-size: 11px; font-weight: 600; cursor: pointer">Learn key range</button>
+<button style="flex: 1; height: 26px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; font-size: 11px; font-weight: 600; cursor: pointer">Detect root pitch</button>
+</div>
+</div>
+
+<div style="height: 1px; background: #23262A; flex-shrink: 0"></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Round Robin</h3>
+<div role="group" aria-label="Round robin mode" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; background: #111315; border: 1px solid #26292D; border-radius: 6px; padding: 2px">
+<sc-for list="{{rrModes}}" as="m" hint-placeholder-count="4">
+<button aria-pressed="{{m.on}}" onClick="{{m.pick}}" style="height: 24px; border: 0; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; background: {{m.bg}}; color: {{m.fg}}">{{m.label}}</button>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{rrFields}}" as="f" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; white-space: nowrap">{{f.label}}</span>
+<span style="height: 26px; box-sizing: border-box; border-radius: 4px; background: #111315; border: 1px solid #2C3035; display: flex; align-items: center; padding: 0 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap">{{f.value}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="height: 1px; background: #23262A; flex-shrink: 0"></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Trigger</h3>
+<div role="group" aria-label="Trigger mode" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; background: #111315; border: 1px solid #26292D; border-radius: 6px; padding: 2px">
+<sc-for list="{{trigModes}}" as="m" hint-placeholder-count="4">
+<button aria-pressed="{{m.on}}" onClick="{{m.pick}}" style="height: 24px; border: 0; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; background: {{m.bg}}; color: {{m.fg}}">{{m.label}}</button>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{trigFields}}" as="f" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; white-space: nowrap">{{f.label}}</span>
+<span style="height: 26px; box-sizing: border-box; border-radius: 4px; background: #111315; border: 1px solid #2C3035; display: flex; align-items: center; padding: 0 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap">{{f.value}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="height: 1px; background: #23262A; flex-shrink: 0"></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Voice</h3>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{voiceFields}}" as="f" hint-placeholder-count="6">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; white-space: nowrap">{{f.label}}</span>
+<span style="height: 26px; box-sizing: border-box; border-radius: 4px; background: #111315; border: 1px solid #2C3035; display: flex; align-items: center; padding: 0 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap">{{f.value}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="height: 1px; background: #23262A; flex-shrink: 0"></div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Articulation &amp; Output</h3>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{outFields}}" as="f" hint-placeholder-count="6">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; white-space: nowrap">{{f.label}}</span>
+<span style="height: 26px; box-sizing: border-box; border-radius: 4px; background: #111315; border: 1px solid #2C3035; display: flex; align-items: center; padding: 0 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap">{{f.value}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F0A23B","options":["#F0A23B","#E8664A","#B9D35A","#ECE9E2"]},"modAccent":{"editor":"color","default":"#5FC2D6","options":["#5FC2D6","#9A97F2","#E08AC4"]},"$preview":{"width":1280,"height":920}}'>
+class Component extends DCLogic {
+  state = { sel: 4, group: 'Felt Piano', rrMode: 'norepeat', trig: 'on', curve: 'soft', rrPos: 0 };
+
+  renderVals() {
+    const acc = this.props.accent ?? '#F0A23B';
+    const mod = this.props.modAccent ?? '#5FC2D6';
+    const s = this.state;
+    const self = this;
+    const rnd = (i, k) => Math.abs(Math.sin(i * k) * 43758.5453) % 1;
+
+    const NOTE = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    const nn = (n) => NOTE[n % 12] + (Math.floor(n / 12) - 2);
+
+    // Layer map: 4 key zones × 3 velocity layers of felt piano, plus two full-range layers
+    const L = [];
+    [[36, 53, 45], [54, 71, 63], [72, 89, 81], [90, 107, 99]].forEach((k) => [['pp', 0, 52], ['mf', 53, 100], ['ff', 101, 127]].forEach((v, vi) => L.push({
+      name: 'Felt ' + nn(k[2]) + ' ' + v[0], group: 'Felt Piano', lo: k[0], hi: k[1], root: k[2], vlo: v[1], vhi: v[2], rr: 3, vi: vi, out: 'Main',
+      file: 'Felt_' + nn(k[2]).replace('♯', 's') + '_' + v[0]
+    })));
+    L.push({ name: 'Bowed Cymbal', group: 'Bowed Cymbal', lo: 48, hi: 96, root: 60, vlo: 64, vhi: 127, rr: 2, vi: 1, out: 'Bus 2', file: 'BowedCym_C3' });
+    L.push({ name: 'Tape Hiss Loop', group: 'Tape Hiss', lo: 24, hi: 119, root: 60, vlo: 0, vhi: 127, rr: 1, vi: 0, out: 'Bus 3', muted: true, file: 'TapeHiss_loop' });
+    const N = L.length;
+    const sel = L[s.sel] || L[0];
+    const colorOf = (l) => l.group === 'Felt Piano' ? acc : (l.group === 'Bowed Cymbal' ? mod : '#9AA0A6');
+
+    // Group filter
+    const groupList = [['All', N], ['Felt Piano', 12], ['Bowed Cymbal', 1], ['Tape Hiss', 1]];
+    const groups = groupList.map(([g, c]) => { const on = s.group === g; return { label: g, count: String(c), on: on ? 'true' : 'false', bg: on ? '#2A2D31' : 'transparent', fg: on ? '#ECE9E2' : '#9AA0A6', pick: () => self.setState({ group: g }) }; });
+
+    // Zones on the map (grid spans C0–B7 = MIDI 24–119)
+    const order = [13, 12, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+    const zones = [];
+    order.forEach((i) => {
+      const l = L[i];
+      if (s.group !== 'All' && l.group !== s.group) return;
+      const on = i === s.sel;
+      const base = colorOf(l);
+      const fill = on ? base + 'CC' : base + (l.group === 'Felt Piano' ? ['2E', '4D', '73'][l.vi] : '2E');
+      zones.push({
+        label: l.name, rr: nn(l.lo) + '–' + nn(l.hi) + (l.rr > 1 ? ' · RR×' + l.rr : ''), aria: 'Select ' + l.name, on: on ? 'true' : 'false',
+        left: ((l.lo - 24) / 96 * 100).toFixed(3), width: ((l.hi - l.lo + 1) / 96 * 100).toFixed(3),
+        top: ((127 - l.vhi) / 128 * 100).toFixed(3), height: ((l.vhi - l.vlo + 1) / 128 * 100).toFixed(3),
+        fill: fill, bd: on ? '#ECE9E2' : base, bw: on ? 2 : 1, z: on ? 3 : 1, fg: on ? '#111315' : '#ECE9E2',
+        pick: () => self.setState({ sel: i, rrPos: 0 })
+      });
+    });
+    const octLines = []; const octLabels = [];
+    for (let o = 0; o < 8; o++) { if (o > 0) octLines.push({ left: (o * 12.5).toFixed(2) }); octLabels.push({ left: (o * 12.5).toFixed(2), label: 'C' + o }); }
+
+    // Keyboard strip under the map
+    const WN = [0, 2, 4, 5, 7, 9, 11]; const whites = []; const blacks = []; const bw = 100 / 56;
+    for (let o = 0; o < 8; o++) for (let w = 0; w < 7; w++) {
+      const i = o * 7 + w; const m = 24 + o * 12 + WN[w];
+      whites.push({ bg: m === sel.root ? mod : (m >= sel.lo && m <= sel.hi ? acc : '#E9E6DF') });
+      if ([0, 1, 3, 4, 5].indexOf(w) >= 0) {
+        const mb = m + 1;
+        blacks.push({ left: ((i + 1) * bw - bw * 0.31).toFixed(3), w: (bw * 0.62).toFixed(3), bg: mb === sel.root ? mod : (mb >= sel.lo && mb <= sel.hi ? '#8A5E22' : '#1A1B1E') });
+      }
+    }
+
+    // Table
+    const pans = ['C', 'L8', 'R8', 'C', 'L14', 'R14'];
+    const vols = L.map((l, i) => i === 13 ? '−12.0 dB' : (i === 12 ? '−4.5 dB' : (i % 3 === 0 ? '0.0 dB' : '−' + ((i % 3) * 1.5).toFixed(1) + ' dB')));
+    const rows = L.map((l, i) => {
+      const on = i === s.sel;
+      return {
+        num: String(i + 1).padStart(2, '0'), name: l.name, group: l.group, keys: nn(l.lo) + ' – ' + nn(l.hi), root: nn(l.root),
+        vel: l.vlo + ' – ' + l.vhi, rr: l.rr > 1 ? '×' + l.rr : '—', vol: vols[i], pan: pans[i % 6], out: l.out,
+        on: on ? 'true' : 'false', muted: l.muted ? 'true' : 'false', muteBg: l.muted ? '#ECE9E2' : '#202327', muteFg: l.muted ? '#111315' : '#C9CCD0',
+        bg: on ? '#25282C' : 'transparent', nameFg: on ? acc : '#ECE9E2',
+        pick: () => self.setState({ sel: i, rrPos: 0 })
+      };
+    });
+
+    // Round robin
+    const count = Math.max(1, sel.rr);
+    const pos = s.rrPos % count;
+    const mw = (seed) => {
+      let t = ''; const b = [];
+      for (let i = 0; i <= 80; i++) {
+        const x = i / 80;
+        const env = (1 - Math.exp(-x * 40)) * Math.exp(-x * (1.8 + (seed % 3) * 0.6)) * 0.9 + 0.04;
+        const a = Math.min(0.95, env * (0.4 + 0.6 * rnd(i + seed * 13, 12.9898)));
+        const X = (x * 200).toFixed(1);
+        t += (i ? ' L' : 'M') + X + ' ' + (22 - a * 20).toFixed(1);
+        b.push(X + ' ' + (22 + a * 20).toFixed(1));
+      }
+      return t + ' L' + b.reverse().join(' L') + ' Z';
+    };
+    const rrSlots = [];
+    for (let r = 0; r < count; r++) {
+      const on = r === pos;
+      rrSlots.push({ label: 'RR ' + (r + 1), file: sel.file + (count > 1 ? '_rr' + (r + 1) : '') + '.wav', path: mw(s.sel * 7 + r), bd: on ? acc : '#2C3035', next: on, color: on ? acc : '#4A4F55', labelFg: on ? acc : '#C9CCD0' });
+    }
+    const modeNames = { off: 'Off', cycle: 'Cycle', random: 'Random', norepeat: 'No Repeat' };
+    const rrSummary = sel.name + ' · ' + count + (count > 1 ? ' variations · ' + modeNames[s.rrMode] : ' sample · no variations');
+    const audition = () => {
+      if (s.rrMode === 'off' || count < 2) return self.setState({ rrPos: 0 });
+      if (s.rrMode === 'cycle') return self.setState({ rrPos: s.rrPos + 1 });
+      let n = Math.floor(Math.random() * count);
+      if (s.rrMode === 'norepeat' && n === pos) n = (n + 1) % count;
+      self.setState({ rrPos: n });
+    };
+    const seg = (list, key, color) => list.map(([id, label]) => { const on = s[key] === id; return { label: label, on: on ? 'true' : 'false', bg: on ? color : 'transparent', fg: on ? '#111315' : '#C9CCD0', pick: () => self.setState({ [key]: id }) }; });
+    const rrModes = seg([['off', 'Off'], ['cycle', 'Cycle'], ['random', 'Random'], ['norepeat', 'No Rep.']], 'rrMode', acc);
+    const trigModes = seg([['on', 'Note On'], ['rel', 'Release'], ['leg', 'Legato'], ['first', 'First']], 'trig', acc);
+
+    // Velocity curve
+    const curveMap = { linear: ['M0 100 L100 0', '96'], soft: ['M0 100 C20 40 50 10 100 0', '112'], hard: ['M0 100 C50 92 82 60 100 0', '71'], fixed: ['M0 30 L100 30', '90'] };
+    const curves = seg([['linear', 'Lin'], ['soft', 'Soft'], ['hard', 'Hard'], ['fixed', 'Fixed']], 'curve', acc);
+
+    const F = (arr) => arr.map(([label, value]) => ({ label: label, value: value }));
+    const felt = sel.group === 'Felt Piano';
+    const mapFields = F([['Low Key', nn(sel.lo)], ['High Key', nn(sel.hi)], ['Root', nn(sel.root)], ['Key Track', sel.group === 'Tape Hiss' ? '0%' : '100%'], ['Low Vel', String(sel.vlo)], ['High Vel', String(sel.vhi)], ['Key Fade', felt ? '2 st' : '0 st'], ['Vel Fade', felt ? '8' : '0']]);
+    const rrFields = F([['RR Group', felt ? 'RR-Felt' : (sel.group === 'Bowed Cymbal' ? 'RR-Cym' : '—')], ['Position', (pos + 1) + ' / ' + count], ['Reset After', '2.0 s idle']]);
+    const trigFields = F([['Release Vol', s.trig === 'rel' ? '0 dB' : '−6 dB'], ['Rel. Decay', '600 ms'], ['Vel → Vol', '80%']]);
+    const voiceFields = F([['Polyphony', felt ? '16' : '4'], ['Choke Grp', sel.group === 'Bowed Cymbal' ? 'Grp 2' : '—'], ['Steal', 'Oldest'], ['Voice Mode', s.trig === 'leg' ? 'Mono' : 'Poly'], ['Glide', s.trig === 'leg' ? '80 ms' : '0 ms'], ['Priority', 'Last']]);
+    const outFields = F([['Keyswitch', felt ? 'C-2' : '—'], ['Articulation', felt ? 'Sustain' : 'All'], ['CC Switch', felt ? 'CC32 0–42' : '—'], ['Output', sel.out === 'Main' ? 'Main 1/2' : sel.out], ['Volume', vols[s.sel]], ['Pan', pans[s.sel % 6]]]);
+
+    return {
+      accent: acc, modAccent: mod,
+      groups: groups, zones: zones, octLines: octLines, octLabels: octLabels, whites: whites, blacks: blacks,
+      rows: rows, rrSlots: rrSlots, rrSummary: rrSummary, audition: audition, rrModes: rrModes, trigModes: trigModes,
+      curves: curves, curvePath: curveMap[s.curve][0], curveOut: curveMap[s.curve][1],
+      selNum: String(s.sel + 1).padStart(2, '0'), selName: sel.name, selGroup: sel.group, selFile: sel.file + '.wav', selColor: colorOf(sel),
+      prev: () => self.setState({ sel: (s.sel + N - 1) % N, rrPos: 0 }),
+      next: () => self.setState({ sel: (s.sel + 1) % N, rrPos: 0 }),
+      mapFields: mapFields, rrFields: rrFields, trigFields: trigFields, voiceFields: voiceFields, outFields: outFields
+    };
+  }
+}
+</script>
+</body>
+</html>

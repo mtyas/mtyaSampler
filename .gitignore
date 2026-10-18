@@ -1,0 +1,8 @@
+build/
+out/
+.vs/
+.vscode/
+*.user
+CMakeUserPresets.json
+# copied from JUCE at configure time
+ui/js/juce/

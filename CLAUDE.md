@@ -1,0 +1,84 @@
+# mtyaSampler — brief for Claude Code
+
+A VST3 + CLAP **sampler instrument** with sound-design features and a serious multi-sample layer editor. The owner is Matt, a musician/sound designer on Windows. Keep explanations practical and in plain language.
+
+## Current state (start here)
+
+- **UI: done.** `ui/` has both pages (Main, Layers), and every control is bound to a parameter. It runs in a browser in preview mode (`cd ui && py -m http.server 8765`).
+- **C++ skeleton: done, not yet built on Windows.** It type-checks against JUCE 8.0.15 headers. The first job is to build it, load it in a DAW, and fix whatever the Windows build turns up.
+- **Audio engine: placeholder.** It plays a sine voice shaped by Env 1, just to prove that MIDI, parameters and meters work end to end.
+
+## Architecture decisions (don't change without asking)
+
+1. **JUCE 8 + CMake.** JUCE comes in through FetchContent. The tag is `MTYA_JUCE_TAG` in CMakeLists.txt.
+2. **CLAP comes from clap-juce-extensions** (`clap_juce_extensions_plugin`). If a later JUCE release adds native CLAP support, it's fine to switch to it and drop the extension.
+3. **The UI is a web UI inside `juce::WebBrowserComponent`.**
+   - It uses WebView2 on Windows, linked statically (`NEEDS_WEBVIEW2`, `JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1`).
+   - The UI files are embedded as BinaryData (`MtyaUI` namespace) and served by a resource provider. Files are found by **file name**, so names under `ui/` must be unique. CMake checks this.
+4. **`ui/params.json` is the only list of automatable parameters.**
+   - `ParameterSpec::createLayout` builds the APVTS from it.
+   - The editor creates one JUCE relay per entry: `WebSliderRelay` for float, `WebToggleButtonRelay` for bool, `WebComboBoxRelay` for choice. Each relay is named by the parameter id.
+   - The UI reads the same file for labels, ranges and formatting.
+5. **The instrument (layers, mapping, round robin…) is JSON, not parameters.**
+   - The processor stores it as a string. It's saved in the plugin state under the `instrument` property.
+   - The UI fetches it with the native function `getInstrument` and sends back the whole edited copy with `setInstrument`.
+   - C++ tells the UI about changes with the `instrumentChanged` event.
+   - The schema is in `docs/ui-spec.md`.
+6. **The UI is a fixed 1280×920 design scaled to fit the window** (`fitToWindow` in main.js). The editor keeps that aspect ratio.
+
+## Rules
+
+- **Never rename or remove a parameter id once it has shipped.** Hosts store automation and presets by id. Add new ids instead, and bump the `ParameterID` version if the meaning changes.
+- **Adding a parameter takes three steps:**
+  1. Add it to `params.json`.
+  2. Use it in the DSP (`apvts.getRawParameterValue`).
+  3. Put a control in `index.html`, either `data-knobs="…"`, `data-choice`, `data-toggle` or `data-hslider`.
+
+  Nothing else needs registering.
+- **Audio thread rules:**
+  - No allocation, locks, JSON parsing or file I/O in `processBlock`.
+  - Parse the instrument JSON into an immutable zone map on a background or message thread, then swap it in atomically.
+- **The UI must keep working in preview mode.** Every new native call needs a mock path in `ui/js/bridge.js`.
+- **No frameworks or build step for the UI** (plain ES modules), unless Matt asks. That keeps the embed and the dev loop simple.
+- **Check UI changes in a real browser.** Serve `ui/`, then use Playwright (or open it) to take screenshots and look at the console. Compare with `docs/screenshots/`.
+- Keep the visual language:
+  - **Colours:** graphite panels, amber `--acc` for sample/filter/amp, cyan `--mod` for modulation.
+  - **Fonts:** Barlow for text, JetBrains Mono for values.
+  - **Sizing:** knobs are 44 px.
+
+## Roadmap (suggested order)
+
+1. **Build and load.** Configure, build Release, load the VST3 and CLAP in a DAW (Reaper or Bitwig test CLAP well).
+   - Check that the knobs move with host automation and that undo works.
+   - Check that the state is saved and restored.
+   - Check that the on-screen keyboard plays the placeholder voice.
+2. **Sample engine (core):**
+   - Load the files named in each layer's `samples` with `AudioFormatManager`. Keep them in RAM first; disk streaming can come later.
+   - Build a `ZoneMap` from the instrument JSON, then for each note decide which zones play: key and velocity ranges plus key/velocity crossfades.
+   - Round robin modes: off, cycle, random, no-repeat. Each RR group keeps its own counter. `rrReset` decides when the counter goes back to the start.
+   - Trigger modes: attack, release (uses `releaseVolume` and `releaseDecay`), legato, first.
+   - Voices: polyphony per layer, choke groups, steal modes, poly/mono/legato voice modes, glide, keyswitch/articulation filtering.
+   - Pitch from `root` and `keyTrack`, plus the `tune` and `fine` parameters. Volume, pan and output bus per layer (multi-out comes later).
+3. **Playback modes** (`play_mode`): one-shot, loop (with `loop_xfade`), ping-pong, slice (16 slices between start and end), and granular (the `grn_*` parameters; Freeze holds the position).
+4. **Sound design:**
+   - Filter types (`flt_type`): LP24, LP12, BP, HP, Comb. `juce::dsp::StateVariableTPTFilter` or `LadderFilter` cover LP/BP/HP; the comb is custom.
+   - 3 ADSRs: Env 1 = amp, Env 2 = filter (`flt_envamt`), Env 3 = mod.
+   - 4 LFOs: shape, rate, depth, phase, fade.
+   - Each envelope and LFO currently has one fixed destination, shown in the UI. Later, add a mod-matrix page.
+5. **FX chain:** saturate, bitcrush, chorus, delay, reverb. Each has an on switch and one amount parameter; add more parameters per effect as needed.
+6. **Macros:** `macro1..4` each map to several targets. This needs a small mapping model, stored in the instrument JSON.
+7. **Native commands:**
+   - `handleCommand` in PluginEditor.cpp currently returns "not implemented". Build out `importSamples` (folder chooser), `autoMap` (parse note names and velocity tags like `C3_mf_rr2` from file names), `fillGaps`, `learnRange` (listen for MIDI), `detectRoot` (pitch detection), presets (`presetPrev/Next/Browse/Save`), `snapZero` and `normalize`.
+   - Waveform peaks: send a `peaks` event with an array of `[min, max]` pairs, and call `displays.setPeaks()` in the UI.
+8. **Polish:**
+   - Bundle the fonts into `ui/fonts/` and replace the Google Fonts `@import`, because a DAW machine may be offline.
+   - Drag-and-drop of audio files onto the UI.
+   - Remember the window size.
+
+## Gotchas
+
+- **WebView2 data folder:** it needs a writable folder. Ours goes in `%TEMP%\mtyaSampler_WebView2`, otherwise hosts installed in Program Files can fail.
+- **Missing WebView2 SDK:** if `find_package(WebView2)` fails, the NuGet package isn't installed (see README).
+- **Computer-keyboard notes:** the UI maps the A–K row to notes. Some DAWs take keystrokes first; that's expected.
+- **Debug assert on startup:** probably `params.json` isn't embedded or isn't valid JSON (jassert in `ParameterSpec::load`).
+- **Keep `ui/js/juce/` out of git.** CMake copies it from JUCE on every configure.

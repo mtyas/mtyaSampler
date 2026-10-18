@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mtyaSampler</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="stage">
+<div id="app" class="app">
+
+<!-- ===== HEADER (shared by both pages) ===== -->
+<header class="top">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#1C1F22" stroke="#33373C"/><path d="M7 11 C11 9 15 13 23 10" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"/><path d="M7 16 C12 14 17 18 23 15" fill="none" stroke="var(--acc)" stroke-opacity=".7" stroke-width="2" stroke-linecap="round"/><path d="M7 21 C11 19 16 23 23 20" fill="none" stroke="var(--mod)" stroke-width="2" stroke-linecap="round"/></svg>
+    <div><span class="word">MTYA</span> <span class="sub">Sampler</span></div>
+    <nav class="seg neutral nav" aria-label="Pages" id="nav">
+      <button data-page="main" aria-pressed="true">Main</button>
+      <button data-page="layers" aria-pressed="false">Layers</button>
+    </nav>
+  </div>
+  <div class="preset">
+    <button class="icon-btn" aria-label="Previous preset" data-action="presetPrev"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2 L4 7 L9 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="name"><b id="preset-name">Amber Dust</b><span id="preset-sub">Pads · Textures</span></div>
+    <button class="icon-btn" aria-label="Next preset" data-action="presetNext"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2 L10 7 L5 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="btn" data-action="presetBrowse">Browse</button>
+    <button class="btn" data-action="presetSave">Save</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><span>Voices</span><span id="stat-voices">00 / 32</span></div>
+    <div class="stat"><span>CPU</span><span id="stat-cpu">0.0%</span></div>
+    <div class="master"><span>Master</span><div class="hslider" data-hslider="master_vol"></div></div>
+    <div class="meter" aria-hidden="true"><div><i id="meter-l" style="height:0%"></i></div><div><i id="meter-r" style="height:0%"></i></div></div>
+  </div>
+</header>
+
+<!-- ===== MAIN PAGE ===== -->
+<main class="page" id="page-main">
+  <div class="row1">
+    <section class="panel editor" aria-label="Sample editor">
+      <div class="ph" style="height:28px">
+        <div class="ph-left" style="align-items:baseline;gap:12px">
+          <h2 class="file" id="sel-file">—</h2>
+          <span class="meta" id="sel-file-meta">44.1 kHz · 24-bit · 4.82 s</span>
+        </div>
+        <div class="seg lg" role="group" aria-label="Playback mode" data-choice="play_mode"></div>
+      </div>
+      <div class="well wave" id="wave">
+        <svg viewBox="0 0 1000 200" preserveAspectRatio="none" role="img" aria-label="Waveform with start, end and loop markers">
+          <path d="M0 50 H1000 M0 150 H1000" stroke="#1C1F23" vector-effect="non-scaling-stroke"/>
+          <line x1="0" y1="100" x2="1000" y2="100" stroke="#262A2E" vector-effect="non-scaling-stroke"/>
+          <rect id="w-loop" y="0" height="200" fill="var(--acc)" opacity=".1"/>
+          <path id="w-path" fill="var(--acc)" fill-opacity=".88"/>
+          <rect id="w-pre" x="0" y="0" height="200" fill="#0B0C0D" fill-opacity=".72"/>
+          <rect id="w-post" y="0" height="200" fill="#0B0C0D" fill-opacity=".72"/>
+          <path id="w-slices" stroke="#ECE9E2" stroke-opacity=".55" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>
+          <g id="w-grain"><rect id="w-grain-win" y="0" height="200" fill="var(--mod)" fill-opacity=".10"/><path id="w-grains" stroke="var(--mod)" stroke-width="4" stroke-linecap="round" vector-effect="non-scaling-stroke"/></g>
+          <path id="w-looplines" stroke="var(--acc)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+          <path id="w-se" stroke="#ECE9E2" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+          <line id="w-play" y1="0" y2="200" stroke="#fff" vector-effect="non-scaling-stroke" opacity="0"/>
+        </svg>
+        <span class="marker se" id="m-s">S</span><span class="marker se" id="m-e">E</span>
+        <span class="marker lp" id="m-l1">L</span><span class="marker lp" id="m-l2">L</span>
+        <span class="marker gr" id="m-g">Grain</span>
+      </div>
+      <div class="ruler" aria-hidden="true" id="ruler"></div>
+      <div class="editor-foot">
+        <div class="knobs tight" data-knobs="smp_start,smp_end,loop_start,loop_end,loop_xfade,tune,fine"></div>
+        <div style="display:flex;gap:8px">
+          <div class="statbox"><span>Root</span><span id="sel-root">C3</span></div>
+          <div class="statbox"><span>Slices</span><span>16</span></div>
+          <button class="btn" data-action="snapZero">Snap 0×</button>
+          <button class="btn" data-action="normalize">Normalize</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel minilayers" aria-label="Layers">
+      <div class="ph">
+        <h2 class="h">Layers <span class="mono" style="letter-spacing:0;color:var(--text);margin-left:4px" id="layer-count">0</span></h2>
+        <button class="btn" data-page-link="layers">Mapping <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6 H10 M7 3 L10 6 L7 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="mlist" id="mini-layers"></div>
+      <button class="btn ghost" style="height:30px;flex-shrink:0" data-action="addLayer">+ Add layer or drop samples</button>
+    </section>
+  </div>
+
+  <div class="row2">
+    <section class="panel" aria-label="Granular engine">
+      <div class="ph"><h2 class="h">Granular</h2><button class="toggle" data-toggle="grn_freeze">Freeze</button></div>
+      <div class="well disp"><svg viewBox="0 0 260 64" preserveAspectRatio="none" role="img" aria-label="Grain cloud"><path id="g-wave" fill="#2A2D31"/><path id="g-cloud" stroke="var(--mod)" stroke-linecap="round" vector-effect="non-scaling-stroke"/><line id="g-pos" y1="0" y2="64" stroke="#ECE9E2" vector-effect="non-scaling-stroke"/></svg></div>
+      <div class="knobs" data-knobs="grn_size,grn_density,grn_spray,grn_pitchrnd" data-color="mod"></div>
+    </section>
+
+    <section class="panel" aria-label="Filter">
+      <div class="ph"><h2 class="h">Filter</h2><div class="seg mono" role="group" aria-label="Filter type" data-choice="flt_type"></div></div>
+      <div class="well disp"><svg viewBox="0 0 260 64" preserveAspectRatio="none" role="img" aria-label="Filter response"><path d="M65 0 V64 M130 0 V64 M195 0 V64" stroke="#1E2124" vector-effect="non-scaling-stroke"/><path id="f-fill" fill="var(--acc)" fill-opacity=".14"/><path id="f-curve" fill="none" stroke="var(--acc)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>
+      <div class="knobs" data-knobs="flt_cutoff,flt_reso,flt_drive,flt_envamt"></div>
+    </section>
+
+    <section class="panel" aria-label="Envelopes">
+      <div class="ph">
+        <div class="ph-left"><h2 class="h">Env</h2>
+          <div class="seg" role="tablist" aria-label="Envelope" id="env-tabs">
+            <button role="tab" data-tab="1" aria-selected="true">Amp</button>
+            <button role="tab" data-tab="2" aria-selected="false">Filter</button>
+            <button role="tab" data-tab="3" aria-selected="false" data-color="mod">Mod</button>
+          </div>
+        </div>
+        <span class="meta" id="env-tag">Vel → 60%</span>
+      </div>
+      <div class="well disp"><svg viewBox="0 0 260 64" preserveAspectRatio="none" role="img" aria-label="Envelope shape"><path id="e-fill" fill-opacity=".14"/><path id="e-curve" fill="none" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>
+      <div class="knobs" data-knobs="env1_attack,env1_decay,env1_sustain,env1_release" data-group="env1"></div>
+      <div class="knobs" data-knobs="env2_attack,env2_decay,env2_sustain,env2_release" data-group="env2" hidden></div>
+      <div class="knobs" data-knobs="env3_attack,env3_decay,env3_sustain,env3_release" data-group="env3" data-color="mod" hidden></div>
+    </section>
+
+    <section class="panel" aria-label="LFOs">
+      <div class="ph">
+        <div class="ph-left"><h2 class="h">LFO</h2>
+          <div class="seg mod mono" role="tablist" aria-label="LFO" id="lfo-tabs">
+            <button role="tab" data-tab="1" aria-label="LFO 1" aria-selected="true" style="width:24px">1</button>
+            <button role="tab" data-tab="2" aria-label="LFO 2" aria-selected="false" style="width:24px">2</button>
+            <button role="tab" data-tab="3" aria-label="LFO 3" aria-selected="false" style="width:24px">3</button>
+            <button role="tab" data-tab="4" aria-label="LFO 4" aria-selected="false" style="width:24px">4</button>
+          </div>
+        </div>
+        <span class="tag" id="lfo-dest">→ Grain Pos</span>
+      </div>
+      <div class="well disp">
+        <svg viewBox="0 0 260 64" preserveAspectRatio="none" role="img" aria-label="LFO waveform"><line x1="0" y1="32" x2="260" y2="32" stroke="#23262A" vector-effect="non-scaling-stroke"/><path id="l-curve" fill="none" stroke="var(--mod)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
+        <div class="seg mod shape-overlay" role="group" aria-label="LFO 1 shape" data-choice="lfo1_shape" data-icons="lfo" data-group="lfo1"></div>
+        <div class="seg mod shape-overlay" role="group" aria-label="LFO 2 shape" data-choice="lfo2_shape" data-icons="lfo" data-group="lfo2" hidden></div>
+        <div class="seg mod shape-overlay" role="group" aria-label="LFO 3 shape" data-choice="lfo3_shape" data-icons="lfo" data-group="lfo3" hidden></div>
+        <div class="seg mod shape-overlay" role="group" aria-label="LFO 4 shape" data-choice="lfo4_shape" data-icons="lfo" data-group="lfo4" hidden></div>
+      </div>
+      <div class="knobs" data-knobs="lfo1_rate,lfo1_depth,lfo1_phase,lfo1_fade" data-color="mod" data-group="lfo1"></div>
+      <div class="knobs" data-knobs="lfo2_rate,lfo2_depth,lfo2_phase,lfo2_fade" data-color="mod" data-group="lfo2" hidden></div>
+      <div class="knobs" data-knobs="lfo3_rate,lfo3_depth,lfo3_phase,lfo3_fade" data-color="mod" data-group="lfo3" hidden></div>
+      <div class="knobs" data-knobs="lfo4_rate,lfo4_depth,lfo4_phase,lfo4_fade" data-color="mod" data-group="lfo4" hidden></div>
+    </section>
+  </div>
+
+  <div class="row3">
+    <section class="panel fx" aria-label="Effects chain">
+      <div class="ph" style="height:18px"><h2 class="h">FX Chain</h2><span class="meta">Drag the bars to set amounts</span></div>
+      <div class="fxgrid" id="fx-grid"></div>
+    </section>
+    <section class="panel macros" aria-label="Macros">
+      <div class="ph" style="height:18px"><h2 class="h">Macros</h2><span class="meta">Double-click a knob to reset</span></div>
+      <div class="knobs around" data-knobs="macro1,macro2,macro3,macro4" data-color="mod"></div>
+    </section>
+  </div>
+
+  <section class="panel kbd-panel" aria-label="Keyboard">
+    <div class="wheels">
+      <div class="wheel" id="pitch-wheel" role="slider" tabindex="0" aria-label="Pitch wheel" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0"><i style="top:calc(50% - 5px)"></i></div>
+      <div class="wheel modw" id="mod-wheel" role="slider" tabindex="0" aria-label="Mod wheel" aria-valuemin="0" aria-valuemax="127" aria-valuenow="0"><b style="height:0%"></b><i style="bottom:0%"></i></div>
+    </div>
+    <div class="kbd-info">
+      <span class="h" style="font-size:10px">Last note</span>
+      <span class="mono" style="font-size:13px" id="last-note">—</span>
+      <div style="display:flex;gap:4px"><button class="btn" id="oct-down" aria-label="Octave down">Oct −</button><button class="btn" id="oct-up" aria-label="Octave up">Oct +</button></div>
+    </div>
+    <div class="kbd-wrap">
+      <div class="zonebar" aria-hidden="true"><div class="z" id="zone-z"></div><div class="r" id="zone-r"></div></div>
+      <div class="keys" id="keys"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ===== LAYERS PAGE ===== -->
+<main class="page" id="page-layers" hidden>
+  <div class="lbody">
+    <div class="lcol">
+      <section class="panel map" aria-label="Key and velocity map">
+        <div class="ph" style="height:24px">
+          <h2 class="h">Key / Velocity Map</h2>
+          <div class="seg neutral" role="group" aria-label="Show group" id="group-filter"></div>
+          <div style="display:flex;gap:6px"><button class="btn" style="height:24px" data-action="fillGaps">Fill gaps</button><button class="btn" style="height:24px" data-action="autoMap">Auto-map by name</button></div>
+        </div>
+        <div class="map-area">
+          <div class="vaxis" aria-hidden="true"><span>127</span><span>96</span><span>64</span><span>32</span><span>0</span></div>
+          <div class="map-col">
+            <div class="grid" id="grid"></div>
+            <div class="strip" id="strip" aria-hidden="true"></div>
+            <div class="octs" id="octs" aria-hidden="true"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel table-panel" aria-label="Layer list">
+        <div class="ph">
+          <h2 class="h">All Layers</h2>
+          <div style="display:flex;gap:6px">
+            <button class="btn" style="height:22px" data-action="importSamples">Import folder…</button>
+            <button class="btn" style="height:22px" data-action="addLayer">Add</button>
+            <button class="btn" style="height:22px" data-action="duplicateLayer">Duplicate</button>
+            <button class="btn" style="height:22px" data-action="deleteLayer">Delete</button>
+          </div>
+        </div>
+        <div class="tbox">
+          <table>
+            <thead><tr><th style="width:28px">#</th><th>Layer</th><th>Group</th><th>Keys</th><th>Root</th><th>Velocity</th><th>RR</th><th>Vol</th><th>Pan</th><th>Out</th><th style="width:56px"><span class="sr">Mute and solo</span></th></tr></thead>
+            <tbody id="layer-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="row-bottom">
+        <section class="panel rr" aria-label="Round robin variations">
+          <div class="ph">
+            <div class="ph-left" style="align-items:baseline;gap:10px"><h2 class="h">Round Robin</h2><span class="meta" id="rr-summary"></span></div>
+            <button class="btn" style="height:24px" id="rr-audition"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1 L9 5 L2 9 Z" fill="currentColor"/></svg>Audition next</button>
+          </div>
+          <div class="rrgrid" id="rr-grid"></div>
+        </section>
+        <section class="panel velc" aria-label="Velocity curve">
+          <div class="ph"><h2 class="h">Velocity Curve</h2><div class="seg" role="group" aria-label="Curve preset" id="curve-seg"></div></div>
+          <div class="body">
+            <div class="well" style="flex:1"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Velocity response curve"><path d="M25 0 V100 M50 0 V100 M75 0 V100 M0 25 H100 M0 50 H100 M0 75 H100" stroke="#1E2124" vector-effect="non-scaling-stroke"/><path d="M0 100 L100 0" stroke="#2C3035" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/><path id="vc-path" fill="none" stroke="var(--acc)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>
+            <div class="side"><div class="stat"><span>In</span><span id="vc-in">96</span></div><div class="stat"><span>Out</span><span id="vc-out">—</span></div></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <aside class="panel inspector" aria-label="Layer inspector" id="inspector"></aside>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

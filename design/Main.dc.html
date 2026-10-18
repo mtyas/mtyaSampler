@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Loam sampler — main window</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0E0F11}
+a{color:#F0A23B}a:hover{color:#FFC371}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 1280px; height: 920px; box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: #0E0F11; font-family: 'Barlow', system-ui, sans-serif; color: #ECE9E2">
+
+<!-- HEADER -->
+
+
+<!-- ROW 1: SAMPLE EDITOR + LAYERS -->
+<header style="height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 6px">
+<div style="display: flex; align-items: center; gap: 12px">
+<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#1C1F22" stroke="#33373C"></rect><path d="M7 11 C11 9 15 13 23 10" fill="none" stroke="{{accent}}" stroke-width="2" stroke-linecap="round"></path><path d="M7 16 C12 14 17 18 23 15" fill="none" stroke="{{accent}}" stroke-opacity=".7" stroke-width="2" stroke-linecap="round"></path><path d="M7 21 C11 19 16 23 23 20" fill="none" stroke="{{modAccent}}" stroke-width="2" stroke-linecap="round"></path></svg>
+<div style="display: flex; align-items: baseline; gap: 10px">
+<span style="font-size: 22px; font-weight: 700; letter-spacing: .22em">LOAM</span>
+<span style="font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #9AA0A6">Sample Sculptor</span>
+</div>
+<nav aria-label="Pages" style="display: flex; gap: 2px; margin-left: 12px; background: #17191C; border: 1px solid #26292D; border-radius: 7px; padding: 2px">
+<a href="Main.dc.html" aria-current="page" style="height: 28px; padding: 0 14px; display: flex; align-items: center; border-radius: 5px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-decoration: none; background: #2A2D31; color: #ECE9E2">Main</a>
+<a href="Layers.dc.html" style="height: 28px; padding: 0 14px; display: flex; align-items: center; border-radius: 5px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-decoration: none; background: transparent; color: #C9CCD0">Layers</a>
+</nav>
+</div>
+
+<div style="display: flex; align-items: center; gap: 6px; background: #17191C; border: 1px solid #26292D; border-radius: 8px; padding: 4px; width: 420px">
+<button aria-label="Previous preset" style="width: 32px; height: 32px; border: 0; border-radius: 6px; background: #202327; color: #C9CCD0; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2 L4 7 L9 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; line-height: 1.15">
+<span style="font-size: 14px; font-weight: 600">Amber Dust</span>
+<span style="font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #9AA0A6">Pads · Textures</span>
+</div>
+<button aria-label="Next preset" style="width: 32px; height: 32px; border: 0; border-radius: 6px; background: #202327; color: #C9CCD0; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2 L10 7 L5 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+<button style="height: 32px; border: 0; border-radius: 6px; background: #202327; color: #ECE9E2; padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .06em; cursor: pointer">Browse</button>
+<button style="height: 32px; border: 0; border-radius: 6px; background: #202327; color: #ECE9E2; padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .06em; cursor: pointer">Save</button>
+</div>
+
+<div style="display: flex; align-items: center; gap: 18px">
+<div style="display: flex; flex-direction: column; line-height: 1.2">
+<span style="font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #9AA0A6">Voices</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">06 / 32</span>
+</div>
+<div style="display: flex; flex-direction: column; line-height: 1.2">
+<span style="font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #9AA0A6">CPU</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">4.1%</span>
+</div>
+<label style="display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #9AA0A6">Master
+<input type="range" min="0" max="100" value="72" style="width: 110px; accent-color: {{accent}}">
+</label>
+<div aria-hidden="true" style="display: flex; gap: 3px; height: 30px; align-items: flex-end">
+<div style="width: 5px; height: 30px; background: #24272B; border-radius: 2px; position: relative; overflow: hidden"><div style="position: absolute; bottom: 0; left: 0; right: 0; height: 68%; background: {{accent}}"></div></div>
+<div style="width: 5px; height: 30px; background: #24272B; border-radius: 2px; position: relative; overflow: hidden"><div style="position: absolute; bottom: 0; left: 0; right: 0; height: 61%; background: {{accent}}"></div></div>
+</div>
+</div>
+</header><div style="height: 340px; display: flex; gap: 12px">
+<section aria-label="Sample editor" style="flex: 1; min-width: 0; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 12px; min-width: 0">
+<h2 style="margin: 0; font-size: 14px; font-weight: 600; white-space: nowrap">{{selFile}}</h2>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9AA0A6; white-space: nowrap">44.1 kHz · 24-bit · 4.82 s</span>
+</div>
+<div role="group" aria-label="Playback mode" style="display: flex; background: #111315; border: 1px solid #26292D; border-radius: 7px; padding: 2px; gap: 2px">
+<sc-for list="{{modes}}" as="m" hint-placeholder-count="5">
+<button aria-pressed="{{m.on}}" onClick="{{m.pick}}" style="height: 24px; padding: 0 11px; border: 0; border-radius: 5px; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; cursor: pointer; background: {{m.bg}}; color: {{m.fg}}">{{m.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="position: relative; height: 168px; border-radius: 6px; background: #111315; border: 1px solid #23262A; overflow: hidden">
+<svg viewBox="0 0 1000 200" preserveAspectRatio="none" width="100%" height="100%" style="display: block" role="img" aria-label="Waveform with start, end and loop markers">
+<path d="M0 50 H1000 M0 150 H1000" stroke="#1C1F23" stroke-width="1" vector-effect="non-scaling-stroke"></path>
+<line x1="0" y1="100" x2="1000" y2="100" stroke="#262A2E" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+<rect x="340" y="0" width="380" height="200" fill="{{accent}}" opacity="{{loopOpacity}}"></rect>
+<path d="{{wave}}" fill="{{accent}}" fill-opacity=".88"></path>
+<rect x="0" y="0" width="80" height="200" fill="#0B0C0D" fill-opacity=".72"></rect>
+<rect x="860" y="0" width="140" height="200" fill="#0B0C0D" fill-opacity=".72"></rect>
+<path d="{{slices}}" stroke="#ECE9E2" stroke-opacity=".55" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" opacity="{{sliceOpacity}}"></path>
+<g opacity="{{grainOpacity}}">
+<rect x="455" y="0" width="140" height="200" fill="{{modAccent}}" fill-opacity=".10"></rect>
+<path d="{{grains}}" stroke="{{modAccent}}" stroke-width="4" stroke-linecap="round" vector-effect="non-scaling-stroke"></path>
+</g>
+<path d="M340 0 V200 M720 0 V200" stroke="{{accent}}" stroke-width="1.5" vector-effect="non-scaling-stroke" opacity="{{loopLineOpacity}}"></path>
+<path d="M80 0 V200 M860 0 V200" stroke="#ECE9E2" stroke-width="1.5" vector-effect="non-scaling-stroke"></path>
+<line x1="540" y1="0" x2="540" y2="200" stroke="#FFFFFF" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+</svg>
+<span style="position: absolute; top: 6px; left: 8%; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; font-size: 10px; background: #ECE9E2; color: #111315; border-radius: 3px; padding: 1px 4px">S</span>
+<span style="position: absolute; top: 6px; left: 86%; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; font-size: 10px; background: #ECE9E2; color: #111315; border-radius: 3px; padding: 1px 4px">E</span>
+<sc-if value="{{showLoop}}" hint-placeholder-val="{{ false }}">
+<span style="position: absolute; bottom: 6px; left: 34%; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; font-size: 10px; background: {{accent}}; color: #111315; border-radius: 3px; padding: 1px 4px">L</span>
+<span style="position: absolute; bottom: 6px; left: 72%; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; font-size: 10px; background: {{accent}}; color: #111315; border-radius: 3px; padding: 1px 4px">L</span>
+</sc-if>
+<sc-if value="{{showGrain}}" hint-placeholder-val="{{ true }}">
+<span style="position: absolute; bottom: 6px; left: 45.5%; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #111315; background: {{modAccent}}; border-radius: 3px; padding: 1px 5px">Grain window · pos 52.5%</span>
+</sc-if>
+</div>
+<div aria-hidden="true" style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #80868C; margin-top: -4px; padding: 0 2px">
+<span>0.0s</span><span>0.8s</span><span>1.6s</span><span>2.4s</span><span>3.2s</span><span>4.0s</span><span>4.8s</span>
+</div>
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 16px">
+<div style="display: flex; gap: 4px">
+<sc-for list="{{sampleKnobs}}" as="k" hint-placeholder-count="7">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 62px">
+<svg width="44" height="44" viewBox="0 0 44 44" role="img" aria-label="{{k.aria}}"><path d="{{k.track}}" fill="none" stroke="#2C3035" stroke-width="3" stroke-linecap="round"></path><path d="{{k.arc}}" fill="none" stroke="{{k.color}}" stroke-width="3" stroke-linecap="round"></path><circle cx="22" cy="22" r="12.5" fill="#24272B" stroke="#363A40" stroke-width="1"></circle><line x1="22" y1="22" x2="{{k.px}}" y2="{{k.py}}" stroke="#ECE9E2" stroke-width="2" stroke-linecap="round"></line></svg>
+<div style="font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; font-weight: 500; white-space: nowrap">{{k.label}}</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ECE9E2">{{k.text}}</div>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 8px">
+<div style="background: #111315; border: 1px solid #26292D; border-radius: 6px; padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 52px">
+<span style="font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #9AA0A6">Root</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">C3</span>
+</div>
+<div style="background: #111315; border: 1px solid #26292D; border-radius: 6px; padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 52px">
+<span style="font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #9AA0A6">Slices</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">16</span>
+</div>
+<button style="height: 44px; border: 1px solid #26292D; border-radius: 6px; background: #202327; color: #ECE9E2; padding: 0 12px; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; cursor: pointer">Snap 0×</button>
+<button style="height: 44px; border: 1px solid #26292D; border-radius: 6px; background: #202327; color: #ECE9E2; padding: 0 12px; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; cursor: pointer">Normalize</button>
+</div>
+</div>
+</section>
+
+<section aria-label="Layers" style="width: 300px; flex-shrink: 0; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px">
+<div style="height: 28px; display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Layers <span style="font-family: 'JetBrains Mono', monospace; letter-spacing: 0; color: #ECE9E2; margin-left: 4px">{{layerCount}}</span></h2>
+<a href="Layers.dc.html" style="height: 26px; padding: 0 10px; display: flex; align-items: center; gap: 6px; border-radius: 5px; background: #202327; border: 1px solid #33373C; color: #ECE9E2; font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; text-decoration: none">Mapping<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6 H10 M7 3 L10 6 L7 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+</div>
+<div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 2px">
+<sc-for list="{{layers}}" as="l" hint-placeholder-count="6">
+<div style="flex-shrink: 0; height: 40px; box-sizing: border-box; border-radius: 6px; border: 1px solid {{l.bd}}; background: {{l.bg}}; display: flex; align-items: center; gap: 6px; padding: 0 6px">
+<button onClick="{{l.pick}}" aria-pressed="{{l.on}}" style="flex: 1; min-width: 0; border: 0; background: transparent; color: #ECE9E2; display: flex; align-items: center; gap: 8px; padding: 0; text-align: left; cursor: pointer">
+<span style="width: 24px; height: 22px; flex-shrink: 0; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; background: {{l.badgeBg}}; color: {{l.badgeFg}}">{{l.num}}</span>
+<span style="display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1">
+<span style="font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{l.name}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9AA0A6; white-space: nowrap">{{l.meta}}</span>
+</span>
+</button>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9AA0A6">{{l.rr}}</span>
+<button aria-label="Mute layer" aria-pressed="{{l.muted}}" style="width: 22px; height: 22px; border: 1px solid #33373C; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer; background: {{l.muteBg}}; color: {{l.muteFg}}">M</button>
+<button aria-label="Solo layer" style="width: 22px; height: 22px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; font-size: 10px; font-weight: 700; cursor: pointer">S</button>
+</div>
+</sc-for>
+</div>
+<button style="flex-shrink: 0; height: 30px; border: 1px dashed #3A3E44; border-radius: 6px; background: transparent; color: #9AA0A6; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer"><svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 2 V12 M2 7 H12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>Add layer or drop samples</button>
+</section>
+</div>
+
+<!-- ROW 2: SOUND DESIGN MODULES -->
+<div style="height: 220px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+
+<section aria-label="Granular engine" style="background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 22px; display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Granular</h2>
+<button aria-pressed="{{freezeOn}}" onClick="{{toggleFreeze}}" style="height: 22px; padding: 0 9px; border-radius: 4px; border: 1px solid {{freezeBd}}; background: {{freezeBg}}; color: {{freezeFg}}; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; cursor: pointer">Freeze</button>
+</div>
+<div style="height: 64px; border-radius: 6px; background: #111315; border: 1px solid #23262A; overflow: hidden">
+<svg viewBox="0 0 260 64" preserveAspectRatio="none" width="100%" height="100%" style="display: block" role="img" aria-label="Grain cloud">
+<path d="{{miniWave}}" fill="#2A2D31"></path>
+<path d="{{cloud}}" stroke="{{modAccent}}" stroke-width="4" stroke-linecap="round" vector-effect="non-scaling-stroke"></path>
+<line x1="136" y1="0" x2="136" y2="64" stroke="#ECE9E2" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+</svg>
+</div>
+<div style="display: flex; justify-content: space-between">
+<sc-for list="{{grainKnobs}}" as="k" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 60px">
+<svg width="44" height="44" viewBox="0 0 44 44" role="img" aria-label="{{k.aria}}"><path d="{{k.track}}" fill="none" stroke="#2C3035" stroke-width="3" stroke-linecap="round"></path><path d="{{k.arc}}" fill="none" stroke="{{k.color}}" stroke-width="3" stroke-linecap="round"></path><circle cx="22" cy="22" r="12.5" fill="#24272B" stroke="#363A40" stroke-width="1"></circle><line x1="22" y1="22" x2="{{k.px}}" y2="{{k.py}}" stroke="#ECE9E2" stroke-width="2" stroke-linecap="round"></line></svg>
+<div style="font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; font-weight: 500; white-space: nowrap">{{k.label}}</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ECE9E2">{{k.text}}</div>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-label="Filter" style="background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 22px; display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Filter</h2>
+<div role="group" aria-label="Filter type" style="display: flex; gap: 2px">
+<sc-for list="{{ftypes}}" as="t" hint-placeholder-count="5">
+<button aria-pressed="{{t.on}}" onClick="{{t.pick}}" style="height: 22px; padding: 0 6px; border: 0; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; cursor: pointer; background: {{t.bg}}; color: {{t.fg}}">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+<div style="height: 64px; border-radius: 6px; background: #111315; border: 1px solid #23262A; overflow: hidden">
+<svg viewBox="0 0 260 64" preserveAspectRatio="none" width="100%" height="100%" style="display: block" role="img" aria-label="Filter response curve">
+<path d="M65 0 V64 M130 0 V64 M195 0 V64" stroke="#1E2124" stroke-width="1" vector-effect="non-scaling-stroke"></path>
+<path d="{{filterFill}}" fill="{{accent}}" fill-opacity=".14"></path>
+<path d="{{filterCurve}}" fill="none" stroke="{{accent}}" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+<div style="display: flex; justify-content: space-between">
+<sc-for list="{{filterKnobs}}" as="k" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 60px">
+<svg width="44" height="44" viewBox="0 0 44 44" role="img" aria-label="{{k.aria}}"><path d="{{k.track}}" fill="none" stroke="#2C3035" stroke-width="3" stroke-linecap="round"></path><path d="{{k.arc}}" fill="none" stroke="{{k.color}}" stroke-width="3" stroke-linecap="round"></path><circle cx="22" cy="22" r="12.5" fill="#24272B" stroke="#363A40" stroke-width="1"></circle><line x1="22" y1="22" x2="{{k.px}}" y2="{{k.py}}" stroke="#ECE9E2" stroke-width="2" stroke-linecap="round"></line></svg>
+<div style="font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; font-weight: 500; white-space: nowrap">{{k.label}}</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ECE9E2">{{k.text}}</div>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-label="Envelopes" style="background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 22px; display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<div style="display: flex; align-items: center; gap: 8px">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Env</h2>
+<div role="tablist" aria-label="Envelope" style="display: flex; gap: 2px; background: #111315; border: 1px solid #26292D; border-radius: 6px; padding: 2px">
+<sc-for list="{{envTabs}}" as="t" hint-placeholder-count="3">
+<button role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="height: 20px; padding: 0 8px; border: 0; border-radius: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; background: {{t.bg}}; color: {{t.fg}}">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9AA0A6; white-space: nowrap">{{envTag}}</span>
+</div>
+<div style="height: 64px; border-radius: 6px; background: #111315; border: 1px solid #23262A; overflow: hidden">
+<svg viewBox="0 0 260 64" preserveAspectRatio="none" width="100%" height="100%" style="display: block" role="img" aria-label="Envelope shape">
+<path d="{{envFill}}" fill="{{envColor}}" fill-opacity=".14"></path>
+<path d="{{envPath}}" fill="none" stroke="{{envColor}}" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+<div style="display: flex; justify-content: space-between">
+<sc-for list="{{envKnobs}}" as="k" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 60px">
+<svg width="44" height="44" viewBox="0 0 44 44" role="img" aria-label="{{k.aria}}"><path d="{{k.track}}" fill="none" stroke="#2C3035" stroke-width="3" stroke-linecap="round"></path><path d="{{k.arc}}" fill="none" stroke="{{k.color}}" stroke-width="3" stroke-linecap="round"></path><circle cx="22" cy="22" r="12.5" fill="#24272B" stroke="#363A40" stroke-width="1"></circle><line x1="22" y1="22" x2="{{k.px}}" y2="{{k.py}}" stroke="#ECE9E2" stroke-width="2" stroke-linecap="round"></line></svg>
+<div style="font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; font-weight: 500; white-space: nowrap">{{k.label}}</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ECE9E2">{{k.text}}</div>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-label="LFOs" style="background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 22px; display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<div style="display: flex; align-items: center; gap: 8px">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">LFO</h2>
+<div role="tablist" aria-label="LFO" style="display: flex; gap: 2px; background: #111315; border: 1px solid #26292D; border-radius: 6px; padding: 2px">
+<sc-for list="{{lfoTabs}}" as="t" hint-placeholder-count="4">
+<button role="tab" aria-label="{{t.aria}}" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="width: 24px; height: 20px; border: 0; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; cursor: pointer; background: {{t.bg}}; color: {{t.fg}}">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #111315; background: {{modAccent}}; border-radius: 3px; padding: 1px 5px; white-space: nowrap">{{lfoDest}}</span>
+</div>
+<div style="position: relative; height: 64px; border-radius: 6px; background: #111315; border: 1px solid #23262A; overflow: hidden">
+<svg viewBox="0 0 260 64" preserveAspectRatio="none" width="100%" height="100%" style="display: block" role="img" aria-label="LFO waveform">
+<line x1="0" y1="32" x2="260" y2="32" stroke="#23262A" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+<path d="{{lfoPath}}" fill="none" stroke="{{modAccent}}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+</svg>
+<div role="group" aria-label="LFO shape" style="position: absolute; left: 4px; top: 4px; display: flex; gap: 2px; background: #111315; border-radius: 4px">
+<sc-for list="{{shapes}}" as="sh" hint-placeholder-count="5">
+<button aria-label="{{sh.label}}" aria-pressed="{{sh.on}}" onClick="{{sh.pick}}" style="width: 22px; height: 18px; border: 0; border-radius: 3px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: {{sh.bg}}; color: {{sh.fg}}"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="{{sh.icon}}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path></svg></button>
+</sc-for>
+</div>
+</div>
+<div style="display: flex; justify-content: space-between">
+<sc-for list="{{lfoKnobs}}" as="k" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 60px">
+<svg width="44" height="44" viewBox="0 0 44 44" role="img" aria-label="{{k.aria}}"><path d="{{k.track}}" fill="none" stroke="#2C3035" stroke-width="3" stroke-linecap="round"></path><path d="{{k.arc}}" fill="none" stroke="{{k.color}}" stroke-width="3" stroke-linecap="round"></path><circle cx="22" cy="22" r="12.5" fill="#24272B" stroke="#363A40" stroke-width="1"></circle><line x1="22" y1="22" x2="{{k.px}}" y2="{{k.py}}" stroke="#ECE9E2" stroke-width="2" stroke-linecap="round"></line></svg>
+<div style="font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; font-weight: 500; white-space: nowrap">{{k.label}}</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ECE9E2">{{k.text}}</div>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+
+<!-- ROW 3: FX + MACROS -->
+<div style="height: 128px; display: flex; gap: 12px">
+<section aria-label="Effects chain" style="flex: 1; min-width: 0; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 18px; display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">FX Chain</h2>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9AA0A6">Drag to reorder</span>
+</div>
+<div style="flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{fx}}" as="f" hint-placeholder-count="5">
+<div style="border-radius: 8px; border: 1px solid {{f.bd}}; background: #1C1F22; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 6px">
+<span style="font-size: 13px; font-weight: 600; color: {{f.fg}}">{{f.name}}</span>
+<button aria-label="{{f.aria}}" aria-pressed="{{f.on}}" onClick="{{f.toggle}}" style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid #33373C; display: flex; align-items: center; justify-content: center; cursor: pointer; background: {{f.btnBg}}; color: {{f.btnFg}}"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 V6 M3.2 3.3 A3.8 3.8 0 1 0 8.8 3.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg></button>
+</div>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: {{f.sub}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{f.param}}</span>
+<span aria-hidden="true" style="height: 4px; background: #2A2D31; border-radius: 2px; position: relative; overflow: hidden"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{f.pct}}%; background: {{f.bar}}"></span></span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-label="Macros" style="width: 380px; flex-shrink: 0; box-sizing: border-box; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px">
+<div style="height: 18px; display: flex; align-items: center; justify-content: space-between">
+<h2 style="margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #9AA0A6">Macros</h2>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9AA0A6">12 targets mapped</span>
+</div>
+<div style="display: flex; justify-content: space-around">
+<sc-for list="{{macros}}" as="k" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 3px; width: 70px">
+<svg width="44" height="44" viewBox="0 0 44 44" role="img" aria-label="{{k.aria}}"><path d="{{k.track}}" fill="none" stroke="#2C3035" stroke-width="3" stroke-linecap="round"></path><path d="{{k.arc}}" fill="none" stroke="{{k.color}}" stroke-width="3" stroke-linecap="round"></path><circle cx="22" cy="22" r="12.5" fill="#24272B" stroke="#363A40" stroke-width="1"></circle><line x1="22" y1="22" x2="{{k.px}}" y2="{{k.py}}" stroke="#ECE9E2" stroke-width="2" stroke-linecap="round"></line></svg>
+<div style="font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #9AA0A6; font-weight: 500; white-space: nowrap">{{k.label}}</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ECE9E2">{{k.text}}</div>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+
+<!-- ROW 4: KEYBOARD -->
+<section aria-label="Keyboard" style="flex: 1; min-height: 0; display: flex; gap: 12px; background: #17191C; border: 1px solid #26292D; border-radius: 10px; padding: 10px 12px">
+<div style="display: flex; gap: 6px; align-items: stretch">
+<div aria-label="Pitch wheel" role="img" style="width: 16px; border-radius: 8px; background: #111315; border: 1px solid #2A2D31; position: relative"><div style="position: absolute; left: 2px; right: 2px; top: 46%; height: 10px; border-radius: 4px; background: #9AA0A6"></div></div>
+<div aria-label="Mod wheel" role="img" style="width: 16px; border-radius: 8px; background: #111315; border: 1px solid #2A2D31; position: relative; overflow: hidden"><div style="position: absolute; left: 0; right: 0; bottom: 0; height: 35%; background: {{modAccent}}; opacity: .5"></div><div style="position: absolute; left: 2px; right: 2px; bottom: 32%; height: 10px; border-radius: 4px; background: {{modAccent}}"></div></div>
+</div>
+<div style="width: 92px; display: flex; flex-direction: column; justify-content: center; gap: 6px">
+<span style="font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #9AA0A6">Last note</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">{{keyLabel}}</span>
+<div style="display: flex; gap: 4px">
+<button aria-label="Octave down" style="flex: 1; height: 22px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; font-size: 11px; cursor: pointer">Oct −</button>
+<button aria-label="Octave up" style="flex: 1; height: 22px; border: 1px solid #33373C; border-radius: 4px; background: #202327; color: #C9CCD0; font-size: 11px; cursor: pointer">Oct +</button>
+</div>
+</div>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<div aria-hidden="true" style="height: 6px; position: relative; background: #111315; border-radius: 3px">
+<div style="position: absolute; top: 0; bottom: 0; left: {{zoneLeft}}%; width: {{zoneWidth}}%; background: {{accent}}; opacity: .55; border-radius: 3px"></div>
+<div style="position: absolute; top: -1px; width: 8px; height: 8px; border-radius: 4px; left: calc({{rootPct}}% - 4px); background: #ECE9E2"></div>
+</div>
+<div style="flex: 1; position: relative; display: flex; border-radius: 4px; overflow: hidden; background: #B9B5AC">
+<sc-for list="{{whites}}" as="w" hint-placeholder-count="29">
+<button aria-label="{{w.nm}}" onClick="{{w.press}}" style="flex: 1; min-width: 0; border: 0; border-right: 1px solid #B9B5AC; border-radius: 0 0 4px 4px; display: flex; align-items: flex-end; justify-content: center; padding: 0 0 4px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #55524C; cursor: pointer; background: {{w.bg}}">{{w.label}}</button>
+</sc-for>
+<sc-for list="{{blacks}}" as="b" hint-placeholder-count="20">
+<button aria-label="{{b.nm}}" onClick="{{b.press}}" style="position: absolute; top: 0; height: 60%; border: 0; border-radius: 0 0 3px 3px; cursor: pointer; left: {{b.left}}%; width: {{b.w}}%; background: {{b.bg}}"></button>
+</sc-for>
+</div>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F0A23B","options":["#F0A23B","#E8664A","#B9D35A","#ECE9E2"]},"modAccent":{"editor":"color","default":"#5FC2D6","options":["#5FC2D6","#9A97F2","#E08AC4"]},"$preview":{"width":1280,"height":920}}'>
+class Component extends DCLogic {
+  state = { mode: 'granular', ftype: 'LP24', env: 0, lfo: 0, lfoShapes: ['sine', 'tri', 'sh', 'saw'], layer: 4, freeze: false, key: null, fx: { sat: true, crush: false, chorus: true, delay: true, reverb: true } };
+
+  renderVals() {
+    const acc = this.props.accent ?? '#F0A23B';
+    const mod = this.props.modAccent ?? '#5FC2D6';
+    const s = this.state;
+    const self = this;
+
+    const pt = (r, deg) => { const a = deg * Math.PI / 180; return [22 + r * Math.sin(a), 22 - r * Math.cos(a)]; };
+    const arc = (a0, a1) => {
+      if (a1 - a0 < 1) a1 = a0 + 1;
+      const p0 = pt(17, a0), p1 = pt(17, a1);
+      return 'M' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) + ' A17 17 0 ' + ((a1 - a0) > 180 ? 1 : 0) + ' 1 ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2);
+    };
+    const track = arc(-135, 135);
+    const knob = (label, v, text, color, bip) => {
+      const ang = -135 + 270 * v;
+      const a0 = bip ? Math.min(0, ang) : -135;
+      const a1 = bip ? Math.max(0, ang) : ang;
+      const p = pt(10, ang);
+      return { label: label, text: text, color: color, track: track, arc: arc(a0, a1), px: p[0].toFixed(2), py: p[1].toFixed(2), aria: label + ' ' + text };
+    };
+    const rnd = (i, k) => Math.abs(Math.sin(i * k) * 43758.5453) % 1;
+
+    // Waveform
+    const N = 360; let top = ''; const bot = [];
+    for (let i = 0; i <= N; i++) {
+      const x = i / N;
+      const env = (1 - Math.exp(-x * 60)) * Math.exp(-x * 1.6) * 0.88 + 0.05;
+      const n = rnd(i, 12.9898);
+      const w = 0.55 + 0.45 * Math.abs(Math.sin(i * 0.37) + 0.5 * Math.sin(i * 0.11));
+      const a = Math.min(0.95, env * (0.35 + 0.65 * n) * w);
+      const X = (x * 1000).toFixed(1);
+      top += (i ? ' L' : 'M') + X + ' ' + (100 - a * 92).toFixed(1);
+      bot.push(X + ' ' + (100 + a * 88).toFixed(1));
+    }
+    const wave = top + ' L' + bot.reverse().join(' L') + ' Z';
+
+    let mt = ''; const mb = [];
+    for (let i = 0; i <= 130; i++) {
+      const x = i / 130;
+      const env = (1 - Math.exp(-x * 60)) * Math.exp(-x * 1.6) * 0.8 + 0.06;
+      const a = Math.min(0.9, env * (0.4 + 0.6 * rnd(i, 7.13)));
+      const X = (x * 260).toFixed(1);
+      mt += (i ? ' L' : 'M') + X + ' ' + (32 - a * 30).toFixed(1);
+      mb.push(X + ' ' + (32 + a * 30).toFixed(1));
+    }
+    const miniWave = mt + ' L' + mb.reverse().join(' L') + ' Z';
+
+    let slices = '';
+    for (let i = 1; i < 16; i++) { const x = (80 + i * (780 / 16)).toFixed(1); slices += 'M' + x + ' 0 V200 '; }
+
+    let grains = '';
+    for (let i = 0; i < 14; i++) {
+      const x = (462 + rnd(i + 3, 78.233) * 126).toFixed(1);
+      const y = 30 + rnd(i + 7, 39.425) * 120;
+      grains += 'M' + x + ' ' + y.toFixed(1) + ' L' + x + ' ' + (y + 22).toFixed(1) + ' ';
+    }
+    let cloud = '';
+    for (let i = 0; i < 34; i++) {
+      const x = (100 + rnd(i + 1, 11.7) * 72).toFixed(1);
+      const y = (8 + rnd(i + 5, 3.91) * 48).toFixed(1);
+      cloud += 'M' + x + ' ' + y + ' l0.01 0 ';
+    }
+
+    // Modes
+    const modeList = [['oneshot', 'One-shot'], ['loop', 'Loop'], ['pingpong', 'Ping-pong'], ['slice', 'Slice'], ['granular', 'Granular']];
+    const modes = modeList.map(([id, label]) => {
+      const on = s.mode === id;
+      return { label: label, on: on ? 'true' : 'false', bg: on ? acc : 'transparent', fg: on ? '#111315' : '#C9CCD0', pick: () => self.setState({ mode: id }) };
+    });
+    const showLoop = s.mode === 'loop' || s.mode === 'pingpong';
+    const showGrain = s.mode === 'granular';
+
+    // Filter
+    const ftypeList = ['LP24', 'LP12', 'BP', 'HP', 'Comb'];
+    const ftypes = ftypeList.map((id) => {
+      const on = s.ftype === id;
+      return { label: id, on: on ? 'true' : 'false', bg: on ? acc : '#202327', fg: on ? '#111315' : '#C9CCD0', pick: () => self.setState({ ftype: id }) };
+    });
+    let comb = '';
+    for (let i = 0; i <= 130; i++) { const x = i * 2; comb += (i ? ' L' : 'M') + x + ' ' + (44 - 30 * Math.pow(Math.abs(Math.cos(x * Math.PI / 32)), 3)).toFixed(1); }
+    const curves = {
+      LP24: 'M0 22 L120 22 C140 22 150 8 160 8 C170 8 176 30 190 44 C205 58 230 62 260 63',
+      LP12: 'M0 22 L120 22 C140 22 150 14 160 14 C175 14 190 32 210 42 C230 52 245 56 260 58',
+      BP: 'M0 63 C40 60 80 40 110 14 C120 6 140 6 150 14 C180 40 220 60 260 63',
+      HP: 'M0 63 C30 62 55 58 70 44 C84 30 90 8 100 8 C110 8 120 22 140 22 L260 22',
+      Comb: comb
+    };
+    const filterCurve = curves[s.ftype];
+    const filterFill = filterCurve + ' L260 64 L0 64 Z';
+
+    // LFO
+    const shapeList = [
+      ['sine', 'Sine', 'M2 8 C4 2 6 2 8 8 C10 14 12 14 14 8'],
+      ['tri', 'Triangle', 'M2 8 L5 3 L11 13 L14 8'],
+      ['saw', 'Saw', 'M2 12 L8 4 L8 12 L14 4'],
+      ['square', 'Square', 'M2 12 V4 H8 V12 H14 V4'],
+      ['sh', 'Sample and hold', 'M2 10 H5 V5 H8 V12 H11 V7 H14']
+    ];
+    const curShape = s.lfoShapes[s.lfo];
+    const shapes = shapeList.map(([id, label, icon]) => {
+      const on = curShape === id;
+      return { label: label, icon: icon, on: on ? 'true' : 'false', bg: on ? mod : 'transparent', fg: on ? '#111315' : '#C9CCD0', pick: () => { const arr = s.lfoShapes.slice(); arr[s.lfo] = id; self.setState({ lfoShapes: arr }); } };
+    });
+    const sh = [0.6, -0.3, 0.9, -0.8, 0.2, -0.5, 0.75, -0.1];
+    const fn = {
+      sine: (t) => Math.sin(t * 2 * Math.PI),
+      tri: (t) => { const u = t % 1; return u < 0.25 ? u * 4 : u < 0.75 ? 2 - u * 4 : u * 4 - 4; },
+      saw: (t) => 1 - 2 * (t % 1),
+      square: (t) => (t % 1) < 0.5 ? 1 : -1,
+      sh: (t) => sh[Math.floor(t * 4) % 8]
+    }[curShape];
+    let lfoPath = '';
+    for (let i = 0; i <= 200; i++) { const t = Math.min(i / 100, 1.9999); lfoPath += (i ? ' L' : 'M') + (i * 1.3).toFixed(1) + ' ' + (32 - fn(t) * 22).toFixed(1); }
+
+    // Envelopes (3)
+    const envData = [
+      { label: 'Amp', tag: 'Vel → 60%', color: acc, path: 'M2 62 L16 6 C30 6 44 22 80 22 L190 22 C210 22 224 52 258 62', k: [['Attack', 0.08, '12 ms'], ['Decay', 0.35, '420 ms'], ['Sustain', 0.7, '−3 dB'], ['Release', 0.45, '1.2 s']] },
+      { label: 'Filter', tag: '→ Cutoff', color: acc, path: 'M2 62 L6 6 C30 6 60 44 110 44 L190 44 C205 44 220 58 258 62', k: [['Attack', 0.02, '2 ms'], ['Decay', 0.5, '680 ms'], ['Sustain', 0.3, '30%'], ['Release', 0.3, '600 ms']] },
+      { label: 'Mod', tag: '→ Grain Size', color: mod, path: 'M2 62 C40 50 70 10 100 6 C120 6 140 30 170 32 L210 32 C225 32 240 56 258 62', k: [['Attack', 0.55, '1.4 s'], ['Decay', 0.4, '900 ms'], ['Sustain', 0.5, '50%'], ['Release', 0.6, '2.4 s']] }
+    ];
+    const env = envData[s.env];
+    const envTabs = envData.map((e, i) => { const on = s.env === i; return { label: e.label, on: on ? 'true' : 'false', bg: on ? e.color : 'transparent', fg: on ? '#111315' : '#C9CCD0', pick: () => self.setState({ env: i }) }; });
+    const envKnobs = env.k.map((x) => knob(x[0], x[1], x[2], env.color));
+
+    // LFOs (4)
+    const lfoData = [
+      { dest: '→ Grain Pos', k: [['Rate', 0.4, '1/8'], ['Depth', 0.55, '55%'], ['Phase', 0.25, '90°'], ['Fade In', 0.2, '180 ms']] },
+      { dest: '→ Pan', k: [['Rate', 0.22, '0.3 Hz'], ['Depth', 0.2, '20%'], ['Phase', 0.5, '180°'], ['Fade In', 0, '0 ms']] },
+      { dest: '→ Cutoff', k: [['Rate', 0.55, '1/16'], ['Depth', 0.35, '35%'], ['Phase', 0, '0°'], ['Fade In', 0.4, '600 ms']] },
+      { dest: '→ Spray', k: [['Rate', 0.1, '4 bars'], ['Depth', 0.7, '70%'], ['Phase', 0.75, '270°'], ['Fade In', 0.1, '50 ms']] }
+    ];
+    const lfoTabs = lfoData.map((l, i) => { const on = s.lfo === i; return { label: String(i + 1), aria: 'LFO ' + (i + 1), on: on ? 'true' : 'false', bg: on ? mod : 'transparent', fg: on ? '#111315' : '#C9CCD0', pick: () => self.setState({ lfo: i }) }; });
+    const lfoKnobs = lfoData[s.lfo].k.map((x) => knob(x[0], x[1], x[2], mod));
+
+    // Layers (same map as the Layers page)
+    const NOTE = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    const nn = (n) => NOTE[n % 12] + (Math.floor(n / 12) - 2);
+    const L = [];
+    [[36, 53, 45], [54, 71, 63], [72, 89, 81], [90, 107, 99]].forEach((k) => [['pp', 0, 52], ['mf', 53, 100], ['ff', 101, 127]].forEach((v) => L.push({ name: 'Felt ' + nn(k[2]) + ' ' + v[0], lo: k[0], hi: k[1], root: k[2], vlo: v[1], vhi: v[2], rr: 3 })));
+    L.push({ name: 'Bowed Cymbal', lo: 48, hi: 96, root: 60, vlo: 64, vhi: 127, rr: 2 });
+    L.push({ name: 'Tape Hiss Loop', lo: 24, hi: 119, root: 60, vlo: 0, vhi: 127, rr: 1, muted: true });
+    const layers = L.map((l, i) => {
+      const on = s.layer === i;
+      return {
+        num: String(i + 1).padStart(2, '0'), name: l.name, meta: nn(l.lo) + '–' + nn(l.hi) + ' · v' + l.vlo + '–' + l.vhi, rr: l.rr > 1 ? 'RR×' + l.rr : '',
+        on: on ? 'true' : 'false', muted: l.muted ? 'true' : 'false',
+        bg: on ? '#1F2225' : '#191B1E', bd: on ? acc : '#26292D',
+        badgeBg: on ? acc : '#2A2D31', badgeFg: on ? '#111315' : '#ECE9E2',
+        muteBg: l.muted ? '#ECE9E2' : '#202327', muteFg: l.muted ? '#111315' : '#C9CCD0',
+        pick: () => self.setState({ layer: i })
+      };
+    });
+    const sel = L[s.layer] || L[0];
+    const clamp = (x) => Math.max(0, Math.min(100, x));
+    const z0 = Math.max(sel.lo, 48), z1 = Math.min(sel.hi, 96);
+    const zoneLeft = clamp((z0 - 48) / 49 * 100).toFixed(2);
+    const zoneWidth = clamp((z1 - z0 + 1) / 49 * 100).toFixed(2);
+    const rootPct = clamp((sel.root - 48 + 0.5) / 49 * 100).toFixed(2);
+    const selFile = sel.name.replace(/ /g, '_') + '.wav';
+
+    // FX
+    const fxData = [
+      ['sat', 'Saturate', 'Tape · drive 4.2 dB', 35],
+      ['crush', 'Bitcrush', '12-bit · 22 kHz', 50],
+      ['chorus', 'Chorus', 'Rate 0.4 Hz · mix 28%', 28],
+      ['delay', 'Delay', '3/16 · feedback 42%', 42],
+      ['reverb', 'Reverb', 'Hall · 3.8 s · mix 30%', 60]
+    ];
+    const fx = fxData.map(([id, name, param, pct]) => {
+      const on = !!s.fx[id];
+      return {
+        name: name, param: param, pct: pct, on: on ? 'true' : 'false', aria: (on ? 'Bypass ' : 'Enable ') + name,
+        bd: on ? '#3A3E44' : '#26292D', fg: on ? '#ECE9E2' : '#80868C', sub: on ? '#9AA0A6' : '#80868C',
+        bar: on ? acc : '#3A3E44', btnBg: on ? acc : '#202327', btnFg: on ? '#111315' : '#80868C',
+        toggle: () => self.setState({ fx: Object.assign({}, s.fx, { [id]: !s.fx[id] }) })
+      };
+    });
+
+    // Keyboard C2–C6
+    const names = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    const whites = []; const blacks = []; const bw = 100 / 29;
+    for (let i = 0; i < 29; i++) {
+      const oct = 2 + Math.floor(i / 7);
+      const nm = names[i % 7] + oct;
+      whites.push({ nm: nm, label: i % 7 === 0 ? nm : '', bg: s.key === nm ? acc : '#E9E6DF', press: () => self.setState({ key: nm }) });
+      if (i < 28 && [0, 1, 3, 4, 5].indexOf(i % 7) >= 0) {
+        const bn = names[i % 7] + '♯' + oct;
+        blacks.push({ nm: bn, left: ((i + 1) * bw - bw * 0.31).toFixed(3), w: (bw * 0.62).toFixed(3), bg: s.key === bn ? acc : '#1A1B1E', press: () => self.setState({ key: bn }) });
+      }
+    }
+
+    return {
+      accent: acc, modAccent: mod,
+      modes: modes, wave: wave, miniWave: miniWave, slices: slices, grains: grains, cloud: cloud,
+      showLoop: showLoop, showGrain: showGrain,
+      loopOpacity: showLoop ? 0.1 : 0, loopLineOpacity: showLoop ? 1 : 0,
+      sliceOpacity: s.mode === 'slice' ? 1 : 0, grainOpacity: showGrain ? 1 : 0,
+      sampleKnobs: [knob('Start', 0.08, '8.0%', acc), knob('End', 0.86, '86.0%', acc), knob('Loop In', 0.34, '34.0%', acc), knob('Loop Out', 0.72, '72.0%', acc), knob('X-Fade', 0.22, '22 ms', acc), knob('Tune', 0.5, '+0 st', acc, true), knob('Fine', 0.56, '+12 ct', acc, true)],
+      grainKnobs: [knob('Size', 0.42, '84 ms', mod), knob('Density', 0.6, '32/s', mod), knob('Spray', 0.3, '18%', mod), knob('Pitch Rnd', 0.15, '±2 st', mod)],
+      filterKnobs: [knob('Cutoff', 0.62, '2.4 kHz', acc), knob('Reso', 0.38, '38%', acc), knob('Drive', 0.25, '+4 dB', acc), knob('Env Amt', 0.68, '+36%', acc, true)],
+      envKnobs: envKnobs, envTabs: envTabs, envPath: env.path, envFill: env.path + ' Z', envColor: env.color, envTag: env.tag,
+      lfoKnobs: lfoKnobs, lfoTabs: lfoTabs, lfoDest: lfoData[s.lfo].dest,
+      macros: [knob('Texture', 0.48, '48%', mod), knob('Motion', 0.62, '62%', mod), knob('Space', 0.7, '70%', mod), knob('Grit', 0.22, '22%', mod)],
+      ftypes: ftypes, filterCurve: filterCurve, filterFill: filterFill,
+      shapes: shapes, lfoPath: lfoPath,
+      freezeOn: s.freeze ? 'true' : 'false', freezeBg: s.freeze ? mod : '#202327', freezeFg: s.freeze ? '#111315' : '#C9CCD0', freezeBd: s.freeze ? mod : '#33373C',
+      toggleFreeze: () => self.setState({ freeze: !s.freeze }),
+      layers: layers, zoneLeft: zoneLeft, zoneWidth: zoneWidth, rootPct: rootPct, selFile: selFile, layerCount: L.length,
+      fx: fx, whites: whites, blacks: blacks,
+      keyLabel: s.key ? s.key + ' · v100' : '—'
+    };
+  }
+}
+</script>
+</body>
+</html>

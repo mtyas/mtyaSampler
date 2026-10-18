@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "_comment": "Single source of truth for every automatable parameter. The C++ processor builds its AudioProcessorValueTreeState from this file (embedded as BinaryData) and the web UI reads it for labels, ranges and formatting. Never rename an id once released: hosts save automation by id.",
+  "params": [
+    { "id": "master_vol", "name": "Master Volume", "label": "Master", "type": "float", "min": 0, "max": 100, "default": 72, "unit": "%", "group": "Master" },
+
+    { "id": "play_mode", "name": "Playback Mode", "type": "choice", "choices": ["One-shot", "Loop", "Ping-pong", "Slice", "Granular"], "default": 4, "group": "Sample" },
+    { "id": "smp_start", "name": "Sample Start", "label": "Start", "type": "float", "min": 0, "max": 100, "default": 8, "unit": "%", "decimals": 1, "group": "Sample" },
+    { "id": "smp_end", "name": "Sample End", "label": "End", "type": "float", "min": 0, "max": 100, "default": 86, "unit": "%", "decimals": 1, "group": "Sample" },
+    { "id": "loop_start", "name": "Loop Start", "label": "Loop In", "type": "float", "min": 0, "max": 100, "default": 34, "unit": "%", "decimals": 1, "group": "Sample" },
+    { "id": "loop_end", "name": "Loop End", "label": "Loop Out", "type": "float", "min": 0, "max": 100, "default": 72, "unit": "%", "decimals": 1, "group": "Sample" },
+    { "id": "loop_xfade", "name": "Loop Crossfade", "label": "X-Fade", "type": "float", "min": 0, "max": 500, "default": 22, "skew": 0.4, "unit": "ms", "group": "Sample" },
+    { "id": "tune", "name": "Tune", "type": "float", "min": -24, "max": 24, "step": 1, "default": 0, "unit": "st", "bipolar": true, "group": "Sample" },
+    { "id": "fine", "name": "Fine Tune", "label": "Fine", "type": "float", "min": -100, "max": 100, "step": 1, "default": 12, "unit": "ct", "bipolar": true, "group": "Sample" },
+
+    { "id": "grn_pos", "name": "Grain Position", "label": "Position", "type": "float", "min": 0, "max": 100, "default": 52.5, "unit": "%", "decimals": 1, "group": "Granular" },
+    { "id": "grn_size", "name": "Grain Size", "label": "Size", "type": "float", "min": 5, "max": 500, "default": 84, "skew": 0.5, "unit": "ms", "group": "Granular" },
+    { "id": "grn_density", "name": "Grain Density", "label": "Density", "type": "float", "min": 1, "max": 100, "default": 32, "skew": 0.5, "unit": "/s", "group": "Granular" },
+    { "id": "grn_spray", "name": "Grain Spray", "label": "Spray", "type": "float", "min": 0, "max": 100, "default": 18, "unit": "%", "group": "Granular" },
+    { "id": "grn_pitchrnd", "name": "Grain Pitch Random", "label": "Pitch Rnd", "type": "float", "min": 0, "max": 12, "default": 2, "unit": "st", "decimals": 1, "group": "Granular" },
+    { "id": "grn_freeze", "name": "Grain Freeze", "label": "Freeze", "type": "bool", "default": false, "group": "Granular" },
+
+    { "id": "flt_type", "name": "Filter Type", "type": "choice", "choices": ["LP24", "LP12", "BP", "HP", "Comb"], "default": 0, "group": "Filter" },
+    { "id": "flt_cutoff", "name": "Filter Cutoff", "label": "Cutoff", "type": "float", "min": 20, "max": 20000, "default": 2400, "skew": 0.25, "unit": "Hz", "group": "Filter" },
+    { "id": "flt_reso", "name": "Filter Resonance", "label": "Reso", "type": "float", "min": 0, "max": 100, "default": 38, "unit": "%", "group": "Filter" },
+    { "id": "flt_drive", "name": "Filter Drive", "label": "Drive", "type": "float", "min": 0, "max": 24, "default": 4, "unit": "dB", "decimals": 1, "group": "Filter" },
+    { "id": "flt_envamt", "name": "Filter Env Amount", "label": "Env Amt", "type": "float", "min": -100, "max": 100, "default": 36, "unit": "%", "bipolar": true, "group": "Filter" },
+
+    { "id": "env1_attack", "name": "Env 1 (Amp) Attack", "label": "Attack", "type": "float", "min": 0.001, "max": 10, "default": 0.012, "skew": 0.3, "unit": "s", "group": "Env 1" },
+    { "id": "env1_decay", "name": "Env 1 (Amp) Decay", "label": "Decay", "type": "float", "min": 0.001, "max": 10, "default": 0.42, "skew": 0.3, "unit": "s", "group": "Env 1" },
+    { "id": "env1_sustain", "name": "Env 1 (Amp) Sustain", "label": "Sustain", "type": "float", "min": 0, "max": 100, "default": 70, "unit": "%", "group": "Env 1" },
+    { "id": "env1_release", "name": "Env 1 (Amp) Release", "label": "Release", "type": "float", "min": 0.001, "max": 20, "default": 1.2, "skew": 0.3, "unit": "s", "group": "Env 1" },
+
+    { "id": "env2_attack", "name": "Env 2 (Filter) Attack", "label": "Attack", "type": "float", "min": 0.001, "max": 10, "default": 0.002, "skew": 0.3, "unit": "s", "group": "Env 2" },
+    { "id": "env2_decay", "name": "Env 2 (Filter) Decay", "label": "Decay", "type": "float", "min": 0.001, "max": 10, "default": 0.68, "skew": 0.3, "unit": "s", "group": "Env 2" },
+    { "id": "env2_sustain", "name": "Env 2 (Filter) Sustain", "label": "Sustain", "type": "float", "min": 0, "max": 100, "default": 30, "unit": "%", "group": "Env 2" },
+    { "id": "env2_release", "name": "Env 2 (Filter) Release", "label": "Release", "type": "float", "min": 0.001, "max": 20, "default": 0.6, "skew": 0.3, "unit": "s", "group": "Env 2" },
+
+    { "id": "env3_attack", "name": "Env 3 (Mod) Attack", "label": "Attack", "type": "float", "min": 0.001, "max": 10, "default": 1.4, "skew": 0.3, "unit": "s", "group": "Env 3" },
+    { "id": "env3_decay", "name": "Env 3 (Mod) Decay", "label": "Decay", "type": "float", "min": 0.001, "max": 10, "default": 0.9, "skew": 0.3, "unit": "s", "group": "Env 3" },
+    { "id": "env3_sustain", "name": "Env 3 (Mod) Sustain", "label": "Sustain", "type": "float", "min": 0, "max": 100, "default": 50, "unit": "%", "group": "Env 3" },
+    { "id": "env3_release", "name": "Env 3 (Mod) Release", "label": "Release", "type": "float", "min": 0.001, "max": 20, "default": 2.4, "skew": 0.3, "unit": "s", "group": "Env 3" },
+
+    { "id": "lfo1_shape", "name": "LFO 1 Shape", "type": "choice", "choices": ["Sine", "Triangle", "Saw", "Square", "S&H"], "default": 0, "group": "LFO 1" },
+    { "id": "lfo1_rate", "name": "LFO 1 Rate", "label": "Rate", "type": "float", "min": 0.01, "max": 30, "default": 2, "skew": 0.3, "unit": "Hz", "group": "LFO 1" },
+    { "id": "lfo1_depth", "name": "LFO 1 Depth", "label": "Depth", "type": "float", "min": 0, "max": 100, "default": 55, "unit": "%", "group": "LFO 1" },
+    { "id": "lfo1_phase", "name": "LFO 1 Phase", "label": "Phase", "type": "float", "min": 0, "max": 360, "default": 90, "unit": "°", "group": "LFO 1" },
+    { "id": "lfo1_fade", "name": "LFO 1 Fade In", "label": "Fade In", "type": "float", "min": 0, "max": 5000, "default": 180, "skew": 0.4, "unit": "ms", "group": "LFO 1" },
+
+    { "id": "lfo2_shape", "name": "LFO 2 Shape", "type": "choice", "choices": ["Sine", "Triangle", "Saw", "Square", "S&H"], "default": 1, "group": "LFO 2" },
+    { "id": "lfo2_rate", "name": "LFO 2 Rate", "label": "Rate", "type": "float", "min": 0.01, "max": 30, "default": 0.3, "skew": 0.3, "unit": "Hz", "group": "LFO 2" },
+    { "id": "lfo2_depth", "name": "LFO 2 Depth", "label": "Depth", "type": "float", "min": 0, "max": 100, "default": 20, "unit": "%", "group": "LFO 2" },
+    { "id": "lfo2_phase", "name": "LFO 2 Phase", "label": "Phase", "type": "float", "min": 0, "max": 360, "default": 180, "unit": "°", "group": "LFO 2" },
+    { "id": "lfo2_fade", "name": "LFO 2 Fade In", "label": "Fade In", "type": "float", "min": 0, "max": 5000, "default": 0, "skew": 0.4, "unit": "ms", "group": "LFO 2" },
+
+    { "id": "lfo3_shape", "name": "LFO 3 Shape", "type": "choice", "choices": ["Sine", "Triangle", "Saw", "Square", "S&H"], "default": 4, "group": "LFO 3" },
+    { "id": "lfo3_rate", "name": "LFO 3 Rate", "label": "Rate", "type": "float", "min": 0.01, "max": 30, "default": 4, "skew": 0.3, "unit": "Hz", "group": "LFO 3" },
+    { "id": "lfo3_depth", "name": "LFO 3 Depth", "label": "Depth", "type": "float", "min": 0, "max": 100, "default": 35, "unit": "%", "group": "LFO 3" },
+    { "id": "lfo3_phase", "name": "LFO 3 Phase", "label": "Phase", "type": "float", "min": 0, "max": 360, "default": 0, "unit": "°", "group": "LFO 3" },
+    { "id": "lfo3_fade", "name": "LFO 3 Fade In", "label": "Fade In", "type": "float", "min": 0, "max": 5000, "default": 600, "skew": 0.4, "unit": "ms", "group": "LFO 3" },
+
+    { "id": "lfo4_shape", "name": "LFO 4 Shape", "type": "choice", "choices": ["Sine", "Triangle", "Saw", "Square", "S&H"], "default": 2, "group": "LFO 4" },
+    { "id": "lfo4_rate", "name": "LFO 4 Rate", "label": "Rate", "type": "float", "min": 0.01, "max": 30, "default": 0.06, "skew": 0.3, "unit": "Hz", "group": "LFO 4" },
+    { "id": "lfo4_depth", "name": "LFO 4 Depth", "label": "Depth", "type": "float", "min": 0, "max": 100, "default": 70, "unit": "%", "group": "LFO 4" },
+    { "id": "lfo4_phase", "name": "LFO 4 Phase", "label": "Phase", "type": "float", "min": 0, "max": 360, "default": 270, "unit": "°", "group": "LFO 4" },
+    { "id": "lfo4_fade", "name": "LFO 4 Fade In", "label": "Fade In", "type": "float", "min": 0, "max": 5000, "default": 50, "skew": 0.4, "unit": "ms", "group": "LFO 4" },
+
+    { "id": "fx_sat_on", "name": "Saturate On", "type": "bool", "default": true, "group": "FX" },
+    { "id": "fx_sat_drive", "name": "Saturate Drive", "label": "Drive", "type": "float", "min": 0, "max": 24, "default": 4.2, "unit": "dB", "decimals": 1, "group": "FX" },
+    { "id": "fx_crush_on", "name": "Bitcrush On", "type": "bool", "default": false, "group": "FX" },
+    { "id": "fx_crush_bits", "name": "Bitcrush Bits", "label": "Bits", "type": "float", "min": 1, "max": 16, "step": 1, "default": 12, "unit": "bit", "group": "FX" },
+    { "id": "fx_chorus_on", "name": "Chorus On", "type": "bool", "default": true, "group": "FX" },
+    { "id": "fx_chorus_mix", "name": "Chorus Mix", "label": "Mix", "type": "float", "min": 0, "max": 100, "default": 28, "unit": "%", "group": "FX" },
+    { "id": "fx_delay_on", "name": "Delay On", "type": "bool", "default": true, "group": "FX" },
+    { "id": "fx_delay_fb", "name": "Delay Feedback", "label": "Feedback", "type": "float", "min": 0, "max": 95, "default": 42, "unit": "%", "group": "FX" },
+    { "id": "fx_reverb_on", "name": "Reverb On", "type": "bool", "default": true, "group": "FX" },
+    { "id": "fx_reverb_mix", "name": "Reverb Mix", "label": "Mix", "type": "float", "min": 0, "max": 100, "default": 30, "unit": "%", "group": "FX" },
+
+    { "id": "macro1", "name": "Macro 1 (Texture)", "label": "Texture", "type": "float", "min": 0, "max": 100, "default": 48, "unit": "%", "group": "Macros" },
+    { "id": "macro2", "name": "Macro 2 (Motion)", "label": "Motion", "type": "float", "min": 0, "max": 100, "default": 62, "unit": "%", "group": "Macros" },
+    { "id": "macro3", "name": "Macro 3 (Space)", "label": "Space", "type": "float", "min": 0, "max": 100, "default": 70, "unit": "%", "group": "Macros" },
+    { "id": "macro4", "name": "Macro 4 (Grit)", "label": "Grit", "type": "float", "min": 0, "max": 100, "default": 22, "unit": "%", "group": "Macros" }
+  ]
+}
