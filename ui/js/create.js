@@ -147,16 +147,20 @@ export function setupCreate(bridge, ui) {
     status = Array(plan.takes.length).fill('');
     recent = [];
     renderRecent();
-    // A new instrument starts from the clean Init (no effects, no modulation, no layers);
-    // otherwise the session's (empty) layers are added to the current one.
-    let inst = clone(bridge.getInstrument());
+    // A new instrument starts from the clean Init (no effects, no modulation, no layers) with the
+    // session's (empty) layers already in it, set in one step so nothing can overwrite them;
+    // otherwise the session's layers are added to the current instrument.
+    let inst;
     if (s.startFrom !== 'add') {
-      const r = await bridge.command('presetNew', s.name);
-      if (r && r.instrument) inst = JSON.parse(r.instrument);
-      else inst.layers = [];
+      const clean = await (await fetch('clean-init.json')).json();
+      inst = clone(clean.instrument);
+      inst.layers = layersForPlan(plan);
+      await bridge.command('presetNew', s.name, JSON.stringify(inst));
+    } else {
+      inst = clone(bridge.getInstrument());
+      inst.layers = inst.layers.filter((l) => l.group !== s.name);
+      inst.layers.push(...layersForPlan(plan));
     }
-    inst.layers = inst.layers.filter((l) => l.group !== s.name);
-    inst.layers.push(...layersForPlan(plan));
     await bridge.setInstrument(inst);
     plan.layerIds = inst.layers.filter((l) => l.group === s.name).map((l) => l.id);
     if (ui.showGroup) ui.showGroup(s.name);
@@ -175,7 +179,9 @@ export function setupCreate(bridge, ui) {
     if (t.file && !t.empty && !t.error) {
       const inst = clone(bridge.getInstrument());
       const layer = inst.layers.find((l) => l.id === plan.layerIds[tk.zone]);
-      if (layer) { layer.samples[tk.rr] = t.file; bridge.setInstrument(inst); }
+      // The full path, so takes saved to a folder of your choice are found too
+      if (layer) { layer.samples[tk.rr] = t.path || t.file; bridge.setInstrument(inst); }
+      else console.warn('mtyaSampler: no layer for take', t.index);
     }
     recent.unshift({ ...t, take: tk });
     recent = recent.slice(0, 12);

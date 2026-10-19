@@ -22,7 +22,8 @@ public:
     juce::var step (int delta);                                               // previous / next in the list
     // The clean starting point (ui/clean-init.json): no effects, no modulation, no layers.
     // `newName` names the new, not yet saved, sound ("Init" by default). The result carries the instrument JSON.
-    juce::var init (const juce::String& newName = "Init");
+    // `instrumentJson`, when given, replaces the empty instrument (the Create page passes its planned layers).
+    juce::var init (const juce::String& newName = "Init", const juce::String& instrumentJson = {});
 
     // What the header shows. Saved with the plugin state.
     juce::String name { "Init" }, category;

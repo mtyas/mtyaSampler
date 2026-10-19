@@ -130,7 +130,7 @@ juce::var PresetManager::step (int delta)
     return load (juce::File ((*items)[next]["path"].toString()));
 }
 
-juce::var PresetManager::init (const juce::String& newName)
+juce::var PresetManager::init (const juce::String& newName, const juce::String& instrumentJson)
 {
     const auto clean = juce::JSON::parse (UiResources::getText ("clean-init.json"));
     const auto& values = clean["params"];
@@ -142,7 +142,8 @@ juce::var PresetManager::init (const juce::String& newName)
             ranged->setValueNotifyingHost (v.isVoid() ? ranged->getDefaultValue() : ranged->convertTo0to1 ((float) (double) v));
             ranged->endChangeGesture();
         }
-    const auto instrument = juce::JSON::toString (clean["instrument"]);
+    const auto given = juce::JSON::parse (instrumentJson);
+    const auto instrument = juce::JSON::toString (given.isObject() ? given : clean["instrument"]);
     proc.setInstrumentJson (instrument, true);
     setCurrent (newName.isNotEmpty() ? newName : juce::String ("Init"), {}, {});
 

@@ -309,7 +309,8 @@ juce::var MtyaSamplerEditor::handleCommand (const juce::String& name, const juce
     if (name == "presetPrev")   return presets.step (-1);
     if (name == "presetNext")   return presets.step (1);
     if (name == "presetInit")   return presets.init();
-    if (name == "presetNew")    return presets.init (args[0].toString().trim().isNotEmpty() ? args[0].toString().trim() : juce::String ("New Instrument"));
+    if (name == "presetNew")    return presets.init (args[0].toString().trim().isNotEmpty() ? args[0].toString().trim() : juce::String ("New Instrument"),
+                                                     args.size() > 1 ? args[1].toString() : juce::String());
     if (name == "presetCurrent")
     {
         auto* o = new juce::DynamicObject();

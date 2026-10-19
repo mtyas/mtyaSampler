@@ -171,6 +171,12 @@ int main()
         check (fresh["layers"].size() == 0 && fresh["modRoutes"].isArray() && fresh["modRoutes"].size() == 0, "no layers and no modulation routes");
         check (p.apvts.getRawParameterValue ("flt_cutoff")->load() > 19000.0f && p.apvts.getRawParameterValue ("lfo1_depth")->load() == 0.0f
                  && p.apvts.getRawParameterValue ("macro1")->load() == 0.0f, "filter open, LFOs and macros at zero");
+
+        // The Create page passes its planned layers so the new instrument is set in one step
+        p.presets.init ("Session", R"({"version":1,"modRoutes":[],"layers":[{"id":7,"name":"Session C3","lo":60,"hi":62,"root":60,"samples":[""]}]})");
+        const auto planned = juce::JSON::parse (p.getInstrumentJson());
+        check (planned["layers"].size() == 1 && (int) planned["layers"][0]["id"] == 7 && p.presets.name == "Session",
+               "a new instrument can start with the session's planned layers already in it");
     }
 
     p.releaseResources();

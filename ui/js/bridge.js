@@ -96,6 +96,7 @@ export async function createBridge() {
   const meterEv = new Emitter();
   const presetEv = new Emitter();
   let instrument = null;   // { version, velocityCurve, layers: [...] }
+  let writesInFlight = 0, refetchAfterWrites = false;
 
   const native = (name) => (Juce ? Juce.getNativeFunction(name) : null);
 
@@ -108,6 +109,9 @@ export async function createBridge() {
   if (inPlugin) {
     // C++ emits these with WebBrowserComponent::emitEventIfBrowserIsVisible
     window.__JUCE__.backend.addEventListener('instrumentChanged', (json) => {
+      // While one of our own edits is on its way, a notice from the plugin may describe an older
+      // state: re-read the plugin's instrument once our edits have landed instead.
+      if (writesInFlight > 0) { refetchAfterWrites = true; return; }
       instrument = typeof json === 'string' ? JSON.parse(json) : json;
       layersEv.emit(instrument);
     });
@@ -162,11 +166,11 @@ export async function createBridge() {
       const next = i < 0 ? (d > 0 ? 0 : list.length - 1) : (i + d + list.length) % list.length;
       return this.load(list[next].path);
     },
-    async init(name = 'Init') {
+    async init(name = 'Init', instrumentJson = '') {
       // Same clean starting point as Source/PresetManager::init (ui/clean-init.json)
       const clean = await (await fetch('clean-init.json')).json();
       for (const [id, v] of params) v.setValue(id in clean.params ? clean.params[id] : v.spec.default);
-      instrument = JSON.parse(JSON.stringify(clean.instrument));
+      instrument = instrumentJson ? JSON.parse(instrumentJson) : JSON.parse(JSON.stringify(clean.instrument));
       layersEv.emit(instrument);
       this.setCurrent({ name, category: '', path: '' });
       return { ok: true, message: name === 'Init' ? 'Clean Init sound: no effects, no layers' : `New instrument “${name}”`, instrument: JSON.stringify(instrument) };
@@ -181,7 +185,7 @@ export async function createBridge() {
       case 'presetPrev': return mockPresets.step(-1);
       case 'presetNext': return mockPresets.step(1);
       case 'presetInit': return mockPresets.init();
-      case 'presetNew': return mockPresets.init(String(args[0] || '').trim() || 'New Instrument');
+      case 'presetNew': return mockPresets.init(String(args[0] || '').trim() || 'New Instrument', args[1]);
       case 'peaks': return { ok: false, meta: 'Preview: no audio files' };
       case 'about': return { version: '0.1.0', format: 'Browser preview' };
       default: return { ok: false, reason: 'preview' };
@@ -201,7 +205,16 @@ export async function createBridge() {
     // Replace the whole instrument (layers + global settings). Cheap enough for a few hundred layers.
     async setInstrument(next) {
       instrument = next;
-      if (inPlugin) await native('setInstrument')(JSON.stringify(next));
+      if (inPlugin) {
+        writesInFlight++;
+        try { await native('setInstrument')(JSON.stringify(next)); }
+        finally { writesInFlight--; }
+        if (writesInFlight === 0 && refetchAfterWrites) {
+          refetchAfterWrites = false;
+          const latest = JSON.parse(await native('getInstrument')());
+          if (writesInFlight === 0) instrument = latest;
+        }
+      }
       layersEv.emit(instrument);
     },
     onInstrument: (fn) => layersEv.on(fn),
