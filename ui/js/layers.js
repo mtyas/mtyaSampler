@@ -428,5 +428,5 @@ export function setupLayers(bridge, ui) {
   bridge.onInstrument((next) => { inst = next; if (sel >= inst.layers.length) sel = Math.max(0, inst.layers.length - 1); renderAll(); });
   renderAll();
 
-  return { actions, current: cur, renderMini };
+  return { actions, current: cur, renderMini, showGroup(g) { group = g; const i = layers().findIndex((l) => l.group === g); if (i >= 0) sel = i; renderAll(); } };
 }

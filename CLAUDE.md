@@ -7,6 +7,10 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 - **UI: done.** `ui/` has both pages (Main, Layers), and every control is bound to a parameter. It runs in a browser in preview mode (`cd ui && py -m http.server 8765`).
 - **C++ skeleton: done, not yet built on Windows.** It type-checks against JUCE 8.0.15 headers. The first job is to build it, load it in a DAW, and fix whatever the Windows build turns up.
 - **Audio engine: placeholder.** It plays a sine voice shaped by Env 1, just to prove that MIDI, parameters and meters work end to end.
+- **Create page (sample-recording assistant): done.**
+  - UI: `ui/js/create.js` and `ui/js/plan.js`, with a browser preview engine in `ui/js/mock-recorder.js`.
+  - Engine: `Source/SampleRecorder.*`. It was compiled and run on Linux in a test program that simulated a full session; the takes saved, trimmed and normalized correctly, and an empty take was retried.
+  - Not yet tried with a real audio input in a DAW.
 
 ## Architecture decisions (don't change without asking)
 
@@ -24,7 +28,13 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
    - The UI fetches it with the native function `getInstrument` and sends back the whole edited copy with `setInstrument`.
    - C++ tells the UI about changes with the `instrumentChanged` event.
    - The schema is in `docs/ui-spec.md`.
-6. **The UI is a fixed 1280×920 design scaled to fit the window** (`fitToWindow` in main.js). The editor keeps that aspect ratio.
+6. **The Create page records from the plugin's audio input bus ("Record In", stereo, optional).**
+   - The JS side plans the session (`plan.js` builds the take list, file names and key/velocity zones) and sends the finished plan with `recorder('start', plan)`.
+   - `SampleRecorder` runs the steps for each take sample-accurately on the audio thread: announce → tone → count-in → record → save.
+   - Saving (trim, fades, normalize, 24-bit WAV) happens on the message thread while the audio thread waits in the save step.
+   - The JS side writes each saved file into its layer's round-robin slot. That's why a session pauses when the editor closes.
+   - Spoken prompts come from a voice pack (`Documents/mtyaSampler/VoicePack/*.wav`, one file per word, made by `tools/make-voice-pack.ps1`) and play through the plugin output. If any word is missing, the UI speaks the prompts with the browser's speech synthesis instead.
+7. **The UI is a fixed 1280×920 design scaled to fit the window** (`fitToWindow` in main.js). The editor keeps that aspect ratio.
 
 ## Rules
 
@@ -70,7 +80,12 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 7. **Native commands:**
    - `handleCommand` in PluginEditor.cpp currently returns "not implemented". Build out `importSamples` (folder chooser), `autoMap` (parse note names and velocity tags like `C3_mf_rr2` from file names), `fillGaps`, `learnRange` (listen for MIDI), `detectRoot` (pitch detection), presets (`presetPrev/Next/Browse/Save`), `snapZero` and `normalize`.
    - Waveform peaks: send a `peaks` event with an array of `[min, max]` pairs, and call `displays.setPeaks()` in the UI.
-8. **Polish:**
+8. **Create page next steps:**
+   - Test it in Reaper, Bitwig and the Standalone app with a real mic or instrument; check input routing and latency.
+   - Optionally send the MIDI note out to a hardware synth so synth sampling is fully hands-free (the plugin would then need MIDI output).
+   - Session normalize currently rewrites the files on the message thread. Move it to a background thread for big sessions.
+   - Add a "listen back" button for the last take (play the WAV through the plugin).
+9. **Polish:**
    - Bundle the fonts into `ui/fonts/` and replace the Google Fonts `@import`, because a DAW machine may be offline.
    - Drag-and-drop of audio files onto the UI.
    - Remember the window size.

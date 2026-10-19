@@ -57,7 +57,9 @@ namespace
 }
 
 MtyaSamplerProcessor::MtyaSamplerProcessor()
-    : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+    : AudioProcessor (BusesProperties()
+                          .withInput  ("Record In", juce::AudioChannelSet::stereo(), true)   // used by the Create page
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       paramSpec (ParameterSpec::load()),
       apvts (*this, nullptr, "PARAMS", ParameterSpec::createLayout (paramSpec))
 {
@@ -71,7 +73,10 @@ MtyaSamplerProcessor::MtyaSamplerProcessor()
 
 bool MtyaSamplerProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
+    // Stereo out. The input is optional: stereo, mono or switched off by the host.
+    const auto in = layouts.getMainInputChannelSet();
+    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo()
+        && (in.isDisabled() || in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo());
 }
 
 void MtyaSamplerProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
@@ -79,6 +84,8 @@ void MtyaSamplerProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     synth.setCurrentPlaybackSampleRate (sampleRate);
     uiMidi.reset (sampleRate);
     loadMeasurer.reset (sampleRate, samplesPerBlock);
+    inputCopy.setSize (2, juce::jmax (1, samplesPerBlock) * 2);
+    recorder.prepare (sampleRate, samplesPerBlock);
 }
 
 void MtyaSamplerProcessor::updateVoiceParameters()
@@ -95,6 +102,14 @@ void MtyaSamplerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     juce::ScopedNoDenormals noDenormals;
     juce::AudioProcessLoadMeasurer::ScopedTimer timer (loadMeasurer, buffer.getNumSamples());
 
+    // Keep the audio input for the recorder, then clear: an instrument starts from silence.
+    const int numSamples = buffer.getNumSamples();
+    const int inChannels = juce::jmin (getTotalNumInputChannels(), 2);
+    const bool inputFits = numSamples <= inputCopy.getNumSamples();   // hosts may exceed the announced block size
+    juce::AudioBuffer<float> inputView (inputCopy.getArrayOfWritePointers(), inputFits ? inChannels : 0, inputFits ? numSamples : 0);
+    for (int ch = 0; ch < inputView.getNumChannels(); ++ch)
+        inputView.copyFrom (ch, 0, buffer, ch, 0, numSamples);
+
     buffer.clear();
     uiMidi.removeNextBlockOfMessages (midi, buffer.getNumSamples());
 
@@ -102,6 +117,9 @@ void MtyaSamplerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     synth.renderNextBlock (buffer, midi, 0, buffer.getNumSamples());
 
     buffer.applyGain (masterVol->load() / 100.0f);
+
+    // Guide track (prompts, tone, count-in) and optional input monitoring; not affected by Master.
+    recorder.process (inputView, buffer, numSamples);
 
     int voices = 0;
     for (int i = 0; i < synth.getNumVoices(); ++i)

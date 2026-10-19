@@ -4,6 +4,8 @@ A sampler instrument with sound-design tools (granular engine, filter, 3 envelop
 
 **Formats:** VST3 and CLAP instrument (plus a Standalone app for quick testing). Windows first; the code is cross-platform.
 
+**Create your own samples:** the Create page is a recording assistant. You choose an instrument preset, note range, how often to sample (every note, every 3 notes…), round robins, velocity layers and the longest take. It then guides you note by note: it announces the note, plays a reference tone and counts you in, then records what you play into the plugin's input. Each take is trimmed, saved as a WAV and mapped straight into the Layers page.
+
 **Status:** the UI is complete and wired to every parameter. The audio engine is a placeholder sine voice so the whole chain (host → MIDI → voices → UI) can be tested. The sampler engine is the next job; see [CLAUDE.md](CLAUDE.md), *Roadmap*.
 
 ![Main page](docs/screenshots/main.png)
@@ -46,6 +48,20 @@ The first configure downloads JUCE and the CLAP extensions, which takes a few mi
 - `CLAP/mtyaSampler.clap` → copy to `C:\Program Files\Common Files\CLAP\`
 - `Standalone/mtyaSampler.exe`, which runs without a DAW
 
+## Recording your own samples (Create page)
+
+1. **Get audio into the plugin.**
+   - *Standalone app:* the easiest route. Pick your audio interface in its settings, and the input goes straight in.
+   - *In a DAW:* send the track with your mic or instrument to the plugin's input. In Reaper, route the audio track to the instrument track's input pins; in Bitwig, use the device's sidechain/input selector. Use headphones, so the guide tone and count-in aren't recorded.
+2. **Optional: spoken prompts through the DAW.** Run this once in PowerShell:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File tools\make-voice-pack.ps1
+   ```
+   It saves Windows' built-in voice saying each word to `Documents\mtyaSampler\VoicePack`. Without it, the plugin window speaks the prompts with the system voice instead.
+3. On the **Create** page, choose your settings and press **Start session**. Space pauses and resumes. Click any cell in the take map to redo that take.
+
+The samples are saved to `Documents\mtyaSampler\Recordings\<session name>` unless you choose another folder.
+
 ## Work on the UI without rebuilding
 
 ```powershell
@@ -64,6 +80,7 @@ CMakeLists.txt         build (JUCE + CLAP + embedded UI)
 Source/                C++: processor, editor (WebView host), parameter loader
 ui/                    the interface: index.html, styles.css, js/, params.json, demo-layers.json
 docs/ui-spec.md        pages, controls, bridge API, layer schema, parameter table
+tools/                 make-voice-pack.ps1 (spoken prompts for the Create page)
 docs/screenshots/      what the UI should look like
 design/                the original design canvases (reference only)
 CLAUDE.md              brief for Claude Code: decisions, rules, roadmap

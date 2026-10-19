@@ -1,6 +1,6 @@
 # mtyaSampler UI spec
 
-Two pages in one fixed 1280×920 window, which scales to the plugin window. Screenshots are in `docs/screenshots/`.
+Three pages in one fixed 1280×920 window, which scales to the plugin window. Screenshots are in `docs/screenshots/`.
 
 ## Main page
 
@@ -29,6 +29,19 @@ Two pages in one fixed 1280×920 window, which scales to the plugin window. Scre
 
 Note fields accept names like `C3`, `F#2` or `D♯3`, or MIDI numbers. C3 = MIDI 60.
 
+## Create page (sample-recording assistant)
+
+| Area | Contents |
+|---|---|
+| Setup | **Instrument presets:** Voice, Guitar, Keys/Piano, Bass, Strings & Winds, Hardware Synth, Drums & One-shots, Custom. **Range:** lowest/highest note, plus "Sample every…" (every note, 2, 3, 4 or 6 semitones, or an octave), with a keyboard preview of the recorded notes. **Takes:** session name, round robins (1–8), velocity layers (1–4), max length per take, order (by note or one pass per round robin), direction. **Assistant:** count-in beats and tempo, tone length, spoken prompts, reference tone, go on automatically. **Recording:** input (stereo, left, right), start level, stop after silence, keep before start, fade-out, normalize (off, whole session, each take), hear the input, replace the instrument, save folder. The footer shows the take count, the estimated time and the Start button. Settings are remembered in the browser storage. |
+| Session | Step strip (Announce, Tone, Count-in, Record, Save), large note name with velocity / RR / take counter, count-in circle (3, 2, 1, GO), live waveform of the take with a REC timer, input meter with the start-level marker and a clip light, and Pause/Resume, Redo last take, Skip, Keep & next (when "go on automatically" is off), Stop. A progress bar runs underneath. |
+| Take map | Rows are velocity layers and columns are recorded notes; each cell has one small box per round robin, coloured to do / now / saved / check / skipped. Click a box to record or redo that take. |
+| Recent takes | The last 12 takes, each with a waveform, file, length, peak and any warnings (clipped, nothing heard), plus a Redo button. |
+
+When a session starts, the planned layers are added to the instrument with empty sample slots, as a group named after the session (or replacing the instrument). Each saved take fills its slot. Skipped slots are removed when the session ends.
+
+File names follow `<Session>_<Note>_<vel>_rr<n>.wav`, for example `My_Guitar_Ds2_f_rr2.wav`, which matches the planned auto-map-by-name feature.
+
 ## Controls (ui/js/controls.js)
 
 - **Knob:** drag up/down; Shift for fine; mouse wheel; double-click resets to the default; arrow keys, Home and End when focused. It has `role="slider"` with value text.
@@ -49,7 +62,16 @@ Native functions (JS calls C++):
 | `wheel` | `"pitch"` or `"mod"`, value 0–1 | — |
 | `command` | name, …args | `{ ok, reason?, message? }` |
 
-Events (C++ → JS): `instrumentChanged` (instrument JSON), `meters` (`{ l, r, voices, cpu }`, 30 per second). Planned: `peaks` (waveform `[min, max]` pairs).
+| `recorder` | command, JSON argument | result `{ ok, message? }` |
+
+`recorder` commands: `start` (plan from `plan.js` `buildPlan`), `pause`, `resume`, `retake` (redo the last saved take), `skip`, `next`, `goto` (take index), `stop`, `monitor` (bool). The `command` function also handles `chooseFolder`, which returns `{ ok, path }`.
+
+Events (C++ → JS):
+- `instrumentChanged`: the instrument JSON.
+- `meters`: `{ l, r, voices, cpu }`, 30 per second.
+- `recorderState`: `{ status, phase, take, total, saved, lastSaved, count, phaseTime, phaseLen, recSec, maxSec, inDb, clip, voiceInUi, voicePack, peaks[] }`, 30 per second.
+- `recorderTake`: `{ index, file, path, lengthSec, peakDb, clipped, empty, skipped, peaks[], error? }`, once per take.
+- Planned: `peaks` (waveform `[min, max]` pairs).
 
 Parameters use JUCE's relays. In JS, `getSliderState(id)`, `getToggleState(id)` and `getComboBoxState(id)` are wrapped by `bridge.param(id)`, which offers `getValue`, `setValue`, `getNorm`, `setNorm`, `begin`, `end` and `onChange`.
 

@@ -25,6 +25,7 @@ private:
     juce::var handleCommand (const juce::String& name, const juce::Array<juce::var>& args);
 
     MtyaSamplerProcessor& proc;
+    std::unique_ptr<juce::FileChooser> folderChooser;
 
     // Declaration order matters: relays → browser → attachments.
     std::vector<std::unique_ptr<juce::WebSliderRelay>> sliderRelays;

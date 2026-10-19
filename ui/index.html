@@ -18,6 +18,7 @@
     <nav class="seg neutral nav" aria-label="Pages" id="nav">
       <button data-page="main" aria-pressed="true">Main</button>
       <button data-page="layers" aria-pressed="false">Layers</button>
+      <button data-page="create" aria-pressed="false">Create</button>
     </nav>
   </div>
   <div class="preset">
@@ -227,6 +228,132 @@
     </div>
 
     <aside class="panel inspector" aria-label="Layer inspector" id="inspector"></aside>
+  </div>
+</main>
+
+<!-- ===== CREATE PAGE: sample-recording assistant ===== -->
+<main class="page" id="page-create" hidden>
+  <div class="cbody">
+    <section class="panel setup" aria-label="Recording session setup">
+      <div class="ph"><h2 class="h">New Recording Session</h2><span class="meta" id="setup-lock" hidden>Locked while recording</span></div>
+      <fieldset class="setup-form" id="setup-form">
+        <div class="sec">
+          <h3 class="h">Instrument</h3>
+          <div class="inst-grid" id="inst-grid" role="group" aria-label="Instrument preset"></div>
+        </div>
+        <div class="sep"></div>
+        <div class="sec">
+          <h3 class="h">Notes</h3>
+          <div class="fields c3">
+            <div class="field"><label for="c-low">Lowest note</label><input id="c-low" data-key="low" data-kind="note" spellcheck="false"></div>
+            <div class="field"><label for="c-high">Highest note</label><input id="c-high" data-key="high" data-kind="note" spellcheck="false"></div>
+            <div class="field"><label for="c-name">Session name</label><input id="c-name" data-key="name" data-kind="text" spellcheck="false"></div>
+          </div>
+          <div class="field"><label id="c-step-l">Sample every…</label><div class="seg fill" role="group" aria-labelledby="c-step-l" data-seg="step"></div></div>
+          <div class="range-kbd" id="range-kbd" aria-hidden="true"></div>
+          <span class="meta" id="range-info"></span>
+        </div>
+        <div class="sep"></div>
+        <div class="sec">
+          <h3 class="h">Takes</h3>
+          <div class="fields c3">
+            <div class="field"><label for="c-rr">Round robins</label><div class="stepper"><button type="button" data-step="rr:-1" aria-label="Fewer round robins">−</button><input id="c-rr" data-key="rr" data-kind="int" data-min="1" data-max="8"><button type="button" data-step="rr:1" aria-label="More round robins">+</button></div></div>
+            <div class="field"><label for="c-vel">Velocity layers</label><div class="stepper"><button type="button" data-step="vel:-1" aria-label="Fewer velocity layers">−</button><input id="c-vel" data-key="vel" data-kind="int" data-min="1" data-max="4"><button type="button" data-step="vel:1" aria-label="More velocity layers">+</button></div></div>
+            <div class="field"><label for="c-max">Max length (s)</label><div class="stepper"><button type="button" data-step="maxSec:-1" aria-label="Shorter">−</button><input id="c-max" data-key="maxSec" data-kind="num" data-min="1" data-max="30"><button type="button" data-step="maxSec:1" aria-label="Longer">+</button></div></div>
+          </div>
+          <div class="fields c2">
+            <div class="field"><label id="c-order-l">Order</label><div class="seg fill" role="group" aria-labelledby="c-order-l" data-seg="order"></div></div>
+            <div class="field"><label id="c-dir-l">Direction</label><div class="seg fill" role="group" aria-labelledby="c-dir-l" data-seg="direction"></div></div>
+          </div>
+        </div>
+        <div class="sep"></div>
+        <div class="sec">
+          <h3 class="h">Assistant</h3>
+          <div class="fields c3">
+            <div class="field"><label for="c-beats">Count-in beats</label><input id="c-beats" data-key="countBeats" data-kind="int" data-min="1" data-max="8"></div>
+            <div class="field"><label for="c-bpm">Count-in BPM</label><input id="c-bpm" data-key="bpm" data-kind="int" data-min="40" data-max="200"></div>
+            <div class="field"><label for="c-tone">Tone length (s)</label><input id="c-tone" data-key="toneSec" data-kind="num" data-min="0" data-max="5"></div>
+          </div>
+          <div class="checks">
+            <label class="check"><input type="checkbox" data-key="voice"> Spoken prompts</label>
+            <label class="check"><input type="checkbox" data-key="tone"> Reference tone</label>
+            <label class="check"><input type="checkbox" data-key="autoAdvance"> Go on automatically</label>
+          </div>
+        </div>
+        <div class="sep"></div>
+        <div class="sec">
+          <h3 class="h">Recording</h3>
+          <div class="fields c3">
+            <div class="field"><label id="c-in-l">Input</label><select data-key="input" aria-labelledby="c-in-l"><option value="stereo">Stereo</option><option value="left">Left (mono)</option><option value="right">Right (mono)</option></select></div>
+            <div class="field"><label for="c-thr">Start level (dB)</label><input id="c-thr" data-key="thresholdDb" data-kind="num" data-min="-80" data-max="-6"></div>
+            <div class="field"><label for="c-sil">Stop after silence (ms)</label><input id="c-sil" data-key="silenceMs" data-kind="int" data-min="0" data-max="5000"></div>
+            <div class="field"><label for="c-pre">Keep before start (ms)</label><input id="c-pre" data-key="prerollMs" data-kind="int" data-min="0" data-max="500"></div>
+            <div class="field"><label for="c-fade">Fade-out (ms)</label><input id="c-fade" data-key="fadeMs" data-kind="int" data-min="0" data-max="2000"></div>
+            <div class="field"><label id="c-norm-l">Normalize</label><select data-key="normalize" aria-labelledby="c-norm-l"><option value="off">Off</option><option value="session">Whole session</option><option value="take">Each take</option></select></div>
+          </div>
+          <div class="checks">
+            <label class="check"><input type="checkbox" data-key="monitor"> Hear the input</label>
+            <label class="check"><input type="checkbox" data-key="replace"> Replace current instrument</label>
+          </div>
+          <div class="field"><label for="c-folder">Save samples to</label><div class="folder"><input id="c-folder" data-key="folder" data-kind="text" spellcheck="false"><button type="button" class="btn" id="choose-folder">Choose…</button></div></div>
+        </div>
+      </fieldset>
+      <div class="setup-foot">
+        <div><b id="plan-takes">0 takes</b><span class="meta" id="plan-detail"></span></div>
+        <button class="btn primary big" id="rec-start"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="currentColor"/></svg>Start session</button>
+      </div>
+    </section>
+
+    <div class="ccol">
+      <section class="panel session" aria-label="Recording session">
+        <div class="ph">
+          <h2 class="h">Session</h2>
+          <ol class="phases" id="phases" aria-label="Steps for each take">
+            <li data-phase="announce">Announce</li><li data-phase="tone">Tone</li><li data-phase="countin">Count-in</li><li data-phase="record">Record</li><li data-phase="save">Save</li>
+          </ol>
+        </div>
+        <div class="stage-row">
+          <div class="prompt" aria-live="polite">
+            <span class="prompt-label" id="p-label">Ready when you are</span>
+            <span class="prompt-note" id="p-note">—</span>
+            <span class="prompt-sub" id="p-sub">Choose your settings, then press Start session.</span>
+          </div>
+          <div class="count" id="p-count" aria-hidden="true"></div>
+        </div>
+        <div class="well take-wave">
+          <svg viewBox="0 0 400 100" preserveAspectRatio="none" role="img" aria-label="Current take waveform"><line x1="0" y1="50" x2="400" y2="50" stroke="#262A2E" vector-effect="non-scaling-stroke"/><path id="t-wave" fill="var(--rec)"/><line id="t-max" y1="0" y2="100" stroke="#3A3E44" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/></svg>
+          <span class="rec-badge" id="rec-badge" hidden><i></i>REC <span id="rec-time">0.0 s</span></span>
+        </div>
+        <div class="meter-row">
+          <span class="h" style="font-size:10px">Input</span>
+          <div class="hmeter" aria-hidden="true"><div class="hm-fill" id="in-fill"></div><div class="hm-thr" id="in-thr"></div></div>
+          <span class="mono" id="in-db" style="width:64px;text-align:right;font-size:12px">−∞ dB</span>
+          <span class="clip" id="in-clip">CLIP</span>
+        </div>
+        <div class="transport">
+          <button class="btn" id="rec-pause" disabled>Pause</button>
+          <button class="btn" id="rec-retake" disabled>Retake</button>
+          <button class="btn" id="rec-skip" disabled>Skip</button>
+          <button class="btn" id="rec-next" disabled hidden>Keep &amp; next</button>
+          <span style="flex:1"></span>
+          <span class="meta" id="rec-progress-txt">0 / 0 takes</span>
+          <button class="btn" id="rec-stop" disabled>Stop</button>
+        </div>
+        <div class="progress" aria-hidden="true"><div id="rec-progress"></div></div>
+      </section>
+
+      <div class="crow">
+        <section class="panel takemap" aria-label="Take map">
+          <div class="ph"><h2 class="h">Take Map</h2><span class="meta">Click a cell to record or redo it</span></div>
+          <div class="tm-legend meta"><span><i class="lg pend"></i>To do</span><span><i class="lg cur"></i>Now</span><span><i class="lg done"></i>Saved</span><span><i class="lg bad"></i>Check</span><span><i class="lg skip"></i>Skipped</span></div>
+          <div class="tm-scroll"><div class="tm-grid" id="tm-grid"></div></div>
+        </section>
+        <section class="panel recent" aria-label="Recent takes">
+          <div class="ph"><h2 class="h">Recent Takes</h2><button class="btn" style="height:22px" data-page-link="layers">Open in Layers</button></div>
+          <div class="recent-list" id="recent-list"><p class="meta empty">Saved takes show up here and go straight into the layer map.</p></div>
+        </section>
+      </div>
+    </div>
   </div>
 </main>
 

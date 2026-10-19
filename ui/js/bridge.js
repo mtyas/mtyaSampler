@@ -90,6 +90,9 @@ export async function createBridge() {
   for (const s of spec.params) params.set(s.id, inPlugin ? new JuceParam(s, Juce) : new MockParam(s));
 
   const layersEv = new Emitter();
+  const recStateEv = new Emitter();
+  const recTakeEv = new Emitter();
+  let mockRec = null;
   const meterEv = new Emitter();
   let instrument = null;   // { version, velocityCurve, layers: [...] }
 
@@ -108,7 +111,13 @@ export async function createBridge() {
       layersEv.emit(instrument);
     });
     window.__JUCE__.backend.addEventListener('meters', (m) => meterEv.emit(m));
+    window.__JUCE__.backend.addEventListener('recorderState', (st) => recStateEv.emit(st));
+    window.__JUCE__.backend.addEventListener('recorderTake', (t) => recTakeEv.emit(t));
   } else {
+    const { MockRecorder } = await import('./mock-recorder.js');
+    mockRec = new MockRecorder();
+    mockRec.on('state', (st) => recStateEv.emit(st));
+    mockRec.on('take', (t) => recTakeEv.emit(t));
     // Fake meters + stats so the preview feels alive
     let t = 0;
     setInterval(() => { t += 0.1; meterEv.emit({ l: 0.55 + 0.1 * Math.sin(t), r: 0.5 + 0.1 * Math.cos(t * 1.3), voices: 6, cpu: 4.1 }); }, 80);
@@ -135,6 +144,13 @@ export async function createBridge() {
     async noteOn(note, vel) { if (inPlugin) await native('noteOn')(note, vel); },
     async noteOff(note) { if (inPlugin) await native('noteOff')(note); },
     async wheel(kind, value) { if (inPlugin) await native('wheel')(kind, value); },
+    // Sample-recording assistant (Create page). Commands: start(plan) pause resume retake skip next goto(i) stop monitor(bool)
+    async recorder(cmd, arg) {
+      if (inPlugin) return native('recorder')(cmd, arg === undefined ? '' : JSON.stringify(arg));
+      return mockRec.send(cmd, arg);
+    },
+    onRecorderState: (fn) => recStateEv.on(fn),
+    onRecorderTake: (fn) => recTakeEv.on(fn),
     // Things the C++ side does with native dialogs (file choosers, preset browser).
     async command(name, ...args) {
       if (!inPlugin) return { ok: false, reason: 'preview' };

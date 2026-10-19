@@ -32,12 +32,16 @@ MtyaSamplerEditor::MtyaSamplerEditor (MtyaSamplerProcessor& p)
     setSize (designWidth * 7 / 8, designHeight * 7 / 8);
 
     proc.addChangeListener (this);
+    proc.recorder.onTake = [this] (const juce::var& take) { browser.emitEventIfBrowserIsVisible ("recorderTake", take); };
     startTimerHz (30);
 }
 
 MtyaSamplerEditor::~MtyaSamplerEditor()
 {
     proc.removeChangeListener (this);
+    // The UI fills the layer map as takes arrive, so a session cannot run without it.
+    proc.recorder.onTake = nullptr;
+    proc.recorder.command ("pause", {});
 }
 
 void MtyaSamplerEditor::resized()
@@ -102,10 +106,35 @@ juce::WebBrowserComponent::Options MtyaSamplerEditor::buildOptions()
             done ({});
         })
 
+        // ---- Create page: sample-recording assistant ----
+        .withNativeFunction ("recorder", [this] (const juce::Array<juce::var>& args, Completion done)
+        {
+            const auto name = args.size() > 0 ? args[0].toString() : juce::String();
+            const auto arg = args.size() > 1 && args[1].toString().isNotEmpty() ? juce::JSON::parse (args[1].toString()) : juce::var();
+            done (proc.recorder.command (name, arg));
+        })
+
         // ---- everything that needs native dialogs or file access ----
         .withNativeFunction ("command", [this] (const juce::Array<juce::var>& args, Completion done)
         {
             const auto name = args.size() > 0 ? args[0].toString() : juce::String();
+            if (name == "chooseFolder")
+            {
+                // Async: the completion is called when the user closes the dialog
+                auto start = args.size() > 1 && juce::File::isAbsolutePath (args[1].toString()) ? juce::File (args[1].toString())
+                                                                                                  : SampleRecorder::defaultRecordingFolder();
+                folderChooser = std::make_unique<juce::FileChooser> ("Where should the recorded samples go?", start);
+                folderChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                                            [done] (const juce::FileChooser& fc)
+                                            {
+                                                auto* r = new juce::DynamicObject();
+                                                const auto dir = fc.getResult();
+                                                r->setProperty ("ok", dir != juce::File());
+                                                r->setProperty ("path", dir.getFullPathName());
+                                                done (juce::var (r));
+                                            });
+                return;
+            }
             juce::Array<juce::var> rest;
             for (int i = 1; i < args.size(); ++i) rest.add (args[i]);
             done (handleCommand (name, rest));
@@ -184,4 +213,5 @@ void MtyaSamplerEditor::timerCallback()
     m->setProperty ("voices", proc.activeVoices.load());
     m->setProperty ("cpu", proc.cpuLoad.load() * 100.0f);
     browser.emitEventIfBrowserIsVisible ("meters", juce::var (m));
+    browser.emitEventIfBrowserIsVisible ("recorderState", proc.recorder.getState());
 }

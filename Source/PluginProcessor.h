@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_basics/juce_audio_basics.h>
+#include "SampleRecorder.h"
 
 // mtyaSampler audio processor.
 //
@@ -56,6 +57,9 @@ public:
     // Notes and wheels played on the on-screen keyboard (message thread → audio thread).
     juce::MidiMessageCollector uiMidi;
 
+    // Create page: the sample-recording assistant. It records from the plugin's audio input.
+    SampleRecorder recorder;
+
     // Read by the editor's timer for meters/stats.
     std::atomic<float> meterL { 0.0f }, meterR { 0.0f };
     std::atomic<int> activeVoices { 0 };
@@ -67,6 +71,7 @@ private:
     mutable juce::CriticalSection instrumentLock;
     juce::String instrumentJson;
 
+    juce::AudioBuffer<float> inputCopy;   // input saved before the buffer is cleared
     juce::Synthesiser synth;   // TODO: replace placeholder voices with the sampler engine
     juce::AudioProcessLoadMeasurer loadMeasurer;
     std::atomic<float>* masterVol = nullptr;

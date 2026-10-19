@@ -2,6 +2,7 @@ import { createBridge } from './bridge.js';
 import { knob, hslider, segmented, toggle, tabs, setAppScale } from './controls.js';
 import { setupDisplays } from './displays.js';
 import { setupLayers, noteName } from './layers.js';
+import { setupCreate } from './create.js';
 
 const $ = (id) => document.getElementById(id);
 const W = 1280, H = 920;
@@ -70,9 +71,13 @@ async function boot() {
   tabs($('lfo-tabs'), 'lfo', (n) => displays.setLfo(n));
 
   // ---------- pages ----------
+  let currentPage = 'main';
+  let create = null;
   const showPage = (name) => {
     $('page-main').hidden = name !== 'main';
     $('page-layers').hidden = name !== 'layers';
+    $('page-create').hidden = name !== 'create';
+    currentPage = name;
     document.querySelectorAll('#nav [data-page]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.page === name)));
   };
   document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', () => showPage(b.dataset.page)));
@@ -120,6 +125,7 @@ async function boot() {
   // Computer keyboard → notes (A W S E D F T G Y H U J K), like most plugins
   const QWERTY = 'awsedftgyhujk';
   window.addEventListener('keydown', (e) => {
+    if (currentPage === 'create') { if (create) create.key(e); return; }
     if (e.repeat || e.target.closest('input,select')) return;
     const i = QWERTY.indexOf(e.key.toLowerCase());
     if (i < 0) return;
@@ -128,6 +134,7 @@ async function boot() {
     if (el) press(n, el);
   });
   window.addEventListener('keyup', (e) => {
+    if (currentPage === 'create') return;
     const i = QWERTY.indexOf(e.key.toLowerCase());
     if (i < 0) return;
     const n = kbdRange()[0] + 12 + i;
@@ -168,6 +175,7 @@ async function boot() {
   // ---------- commands that need C++ (file dialogs, presets, sample analysis) ----------
   const ui = {
     kbdRange,
+    toast,
     async command(name, ...args) {
       const r = await bridge.command(name, ...args);
       if (r && r.reason === 'preview') toast(`“${name}” works inside the plugin`);
@@ -176,6 +184,8 @@ async function boot() {
     }
   };
   const layers = setupLayers(bridge, ui);
+  ui.showGroup = layers.showGroup;
+  create = setupCreate(bridge, ui);
   const octave = (d) => { baseOct = Math.max(-1, Math.min(6, baseOct + d)); buildKeys(); layers.renderMini(); };
   $('oct-down').onclick = () => octave(-1);
   $('oct-up').onclick = () => octave(1);

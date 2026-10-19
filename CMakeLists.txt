@@ -54,7 +54,8 @@ target_sources(mtyaSampler PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/ParameterSpec.cpp
-    Source/UiResources.cpp)
+    Source/UiResources.cpp
+    Source/SampleRecorder.cpp)
 
 # ---------------------------------------------------------------------------
 # Web UI → BinaryData
