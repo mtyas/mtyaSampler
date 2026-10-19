@@ -2,7 +2,7 @@
 #include "SamplerEngine.h"
 #include <juce_dsp/juce_dsp.h>
 
-// The master effects: saturate, bitcrush, chorus, delay and reverb, in the order the instrument
+// The master effects: saturate, bitcrush, chorus, delay, reverb and tape, in the order the instrument
 // sets ("fxOrder", dragged in the UI). Each effect fades in and out when switched (no clicks) and
 // is skipped entirely while off. Parameter values come from the engine, so macros can move them.
 // Audio thread only after prepare().
@@ -20,7 +20,7 @@ public:
     static constexpr double tailSeconds = 10.0;
 
 private:
-    enum { sat, crush, chorusFx, delayFx, reverbFx, numFx };
+    enum { sat, crush, chorusFx, delayFx, reverbFx, tapeFx, numFx };
 
     float p (int index, float fallback) const noexcept { return engine.param (index, fallback); }
 
@@ -29,6 +29,7 @@ private:
     void processChorus (juce::AudioBuffer<float>&, int n) noexcept;
     void processDelay (juce::AudioBuffer<float>&, int n, double bpm) noexcept;
     void processReverb (juce::AudioBuffer<float>&, int n) noexcept;
+    void processTape (juce::AudioBuffer<float>&, int n) noexcept;
 
     const SamplerEngine& engine;
     double sr = 44100.0;
@@ -41,6 +42,7 @@ private:
         int chorusMix, chorusRate, chorusDepth, chorusFb;
         int delayFb, delayTime, delaySync, delayDiv, delayMix, delayPingPong, delayTone;
         int reverbMix, reverbSize, reverbDamp, reverbWidth, reverbPredelay;
+        int tapeDrive, tapeWow, tapeFlutter, tapeTone, tapeMix;
     } ix {};
 
     juce::SmoothedValue<float> onGain[numFx];
@@ -63,6 +65,15 @@ private:
     juce::SmoothedValue<float> delaySamples;
     bool delayFresh = true;   // just switched on: start at the set time instead of gliding to it
     float delayLp[2] {};
+
+    // tape: a short delay line whose time wobbles (wow: slow, flutter: fast), then saturation and tone
+    juce::AudioBuffer<float> tapeLine;
+    int tapeWrite = 0;
+    double wowPhase = 0, flutterPhase = 0, flutterPhase2 = 0;
+    float wowDrift = 0, wowDriftTarget = 0, flutterJitter = 0;
+    int driftCountdown = 0;
+    float tapeLp[2] {}, tapeDcX[2] {}, tapeDcY[2] {};
+    juce::Random tapeRandom;
 
     // reverb
     juce::dsp::Reverb reverb;

@@ -89,6 +89,12 @@
     { "id": "fx_reverb_damp", "name": "Reverb Damping", "label": "Damping", "type": "float", "min": 0, "max": 100, "default": 40, "unit": "%", "group": "FX" },
     { "id": "fx_reverb_width", "name": "Reverb Width", "label": "Width", "type": "float", "min": 0, "max": 100, "default": 100, "unit": "%", "group": "FX" },
     { "id": "fx_reverb_predelay", "name": "Reverb Pre-delay", "label": "Pre-delay", "type": "float", "min": 0, "max": 250, "default": 12, "unit": "ms", "group": "FX" },
+    { "id": "fx_tape_on", "name": "Tape On", "type": "bool", "default": false, "group": "FX" },
+    { "id": "fx_tape_drive", "name": "Tape Drive", "label": "Drive", "type": "float", "min": 0, "max": 24, "default": 6, "unit": "dB", "decimals": 1, "group": "FX" },
+    { "id": "fx_tape_wow", "name": "Tape Wow", "label": "Wow", "type": "float", "min": 0, "max": 100, "default": 30, "unit": "%", "group": "FX" },
+    { "id": "fx_tape_flutter", "name": "Tape Flutter", "label": "Flutter", "type": "float", "min": 0, "max": 100, "default": 20, "unit": "%", "group": "FX" },
+    { "id": "fx_tape_tone", "name": "Tape Tone", "label": "Tone", "type": "float", "min": 1500, "max": 20000, "default": 12000, "skew": 0.4, "unit": "Hz", "group": "FX" },
+    { "id": "fx_tape_mix", "name": "Tape Mix", "label": "Mix", "type": "float", "min": 0, "max": 100, "default": 100, "unit": "%", "group": "FX" },
 
     { "id": "macro1", "name": "Macro 1 (Texture)", "label": "Texture", "type": "float", "min": 0, "max": 100, "default": 48, "unit": "%", "group": "Macros" },
     { "id": "macro2", "name": "Macro 2 (Motion)", "label": "Motion", "type": "float", "min": 0, "max": 100, "default": 62, "unit": "%", "group": "Macros" },

@@ -37,6 +37,7 @@ mtyaSampler is a sampler with three pages: **Main** (play and shape the sound), 
 
 The waveform shows the selected layer's sample, with these markers:
 
+- A white **playhead** line for each note playing that sample, moving as it plays (in Granular mode it follows the grain position).
 - **S** and **E**: where playback starts and ends.
 - **L**: the loop points (shown in Loop and Ping-pong modes).
 - Slice lines, or the grain window, depending on the mode.
@@ -78,9 +79,10 @@ The buttons next to the knobs:
 | **Density** | How many grains start each second. |
 | **Spray** | How far each grain's start point randomly moves from the position. |
 | **Pitch Rnd** | Random detuning per grain, in semitones. |
-| **Freeze** | Holds the cloud at the grain position. When it's off, the position moves through the sample at normal speed. |
+| **Position** | Where in the sample (between Start and End) the grains come from. |
+| **Freeze** | Holds the cloud at the position. When it's off, the position moves through the sample at normal speed. |
 
-The grain position starts at the waveform's **Grain** marker. LFO 1 moves it by default.
+You can also set the position by dragging in the grain cloud display, or, in Granular mode, by dragging inside the waveform (away from the S and E lines). LFO 1 moves it by default.
 
 ### Filter
 
@@ -105,7 +107,7 @@ All of them run at double the sample rate, and fast cutoff moves glide instead o
 
 **Env** has three tabs, each with Attack, Decay, Sustain and Release:
 
-- **Amp (Env 1)** shapes the volume of every note.
+- **Amp (Env 1)** shapes the volume of every note, and can also modulate anything else.
 - **Filter (Env 2)** drives the cutoff through Env Amt, and can modulate anything else too.
 - **Mod (Env 3)** is free to modulate anything. By default it lengthens the grains.
 
@@ -128,7 +130,12 @@ The tag at the right of the Env and LFO panels shows where that envelope or LFO 
 - Choose a **target**, and set the **amount** from −100 % to +100 %. Negative amounts move the other way. Double-click the amount slider to zero it.
 - **+ Add target** sends the same source to several places. **×** removes a target.
 
-What 100 % means for each target:
+There are two kinds of target:
+
+- **Voice targets** (the first group in the list) move each note on its own: an LFO on Cutoff wobbles every note separately.
+- **Knobs:** any knob in the plugin, from an effect's mix to an LFO's rate. A knob is shared by all notes, so an envelope or LFO moving it follows the most recently played note. Macros, the mod wheel and aftertouch are the same for every note anyway.
+
+What 100 % means for each voice target:
 
 | Target | 100 % means |
 |---|---|
@@ -152,13 +159,13 @@ The matrix also has sources without a panel of their own:
 
 - **Mod wheel** and **Aftertouch** from your keyboard.
 - **Velocity**: how hard you play.
-- **Key**: how far the note is from C3, for things like brighter high notes.
+- **Key track (pitch)**: how far the note is above or below C3, for things like brighter high notes or shorter grains up the keyboard.
 
-Macros, the mod wheel and aftertouch can also move **any knob in the plugin**, including the effects; they're listed under "parameters". **Reset to defaults** brings back the starting routing.
+For a knob, 100 % sweeps its whole range. **Reset to defaults** brings back the starting routing.
 
 ### FX chain
 
-The five effects run in a row, left to right:
+The six effects run in a row, left to right:
 
 - **Drag a slot** by its name or dots to change the order. With one of a slot's buttons focused, **Alt + ←/→** also moves it.
 - The **power button** turns an effect on or off, with a short fade so it doesn't click.
@@ -174,6 +181,7 @@ The five effects run in a row, left to right:
 | **Chorus** | Mix, Rate, Depth, Feedback |
 | **Delay** | Time, or **Sync** to the host tempo with a division (1/32 to 1/1, dotted and triplet); Feedback, Mix, **Ping-pong**, Tone (repeats get darker) |
 | **Reverb** | Mix, Size, Damping, Width, Pre-delay |
+| **Tape** | Wow (slow pitch drift), Flutter (fast wobble), Drive (tape saturation), Tone (high-frequency loss), Mix. Off by default. |
 
 The order is saved with the preset.
 
@@ -217,7 +225,7 @@ A preset contains every knob, every layer, the modulation routing and the FX ord
 
 An instrument is made of **layers**. Each layer is one or more samples that play over a range of keys and velocities.
 
-- **Key / Velocity Map:** each box is a layer, with keys across and velocity up. Click a box to select it, drag it to move it, drag its edges to resize it, or nudge it with the arrow keys. The group buttons above show one group at a time.
+- **Key / Velocity Map:** each box is a layer, with keys across and velocity up. Click a box to select it, drag it to move it, drag its edges to resize it, or nudge it with the arrow keys. **Double-click** a box to open its sample in the editor on the Main page (this works on table rows and round-robin slots too). The group buttons above show one group at a time.
   - **Fill gaps** stretches neighbouring zones so no keys are left silent.
   - **Auto-map by name** reads the note and dynamic from the sample names and lays the zones out for you.
 - **All Layers:** a table of every layer, with mute and solo. **Import folder…**, **Add**, **Duplicate** and **Delete** are above it.

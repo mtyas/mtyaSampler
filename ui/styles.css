@@ -90,6 +90,7 @@ button { cursor: pointer; }
 .knobs { display: flex; justify-content: space-between; }
 .knobs.tight { justify-content: flex-start; gap: 4px; }
 .knobs.around { justify-content: space-around; }
+.knobs.five .knob { width: 52px; }
 .knob { width: 60px; display: flex; flex-direction: column; align-items: center; gap: 3px; --kc: var(--acc); }
 .knob.mod { --kc: var(--mod); }
 .knob-dial { width: 44px; height: 44px; border-radius: 50%; cursor: ns-resize; touch-action: none; }
@@ -170,7 +171,7 @@ button { cursor: pointer; }
 
 .row3 { height: 148px; flex-shrink: 0; display: flex; gap: 12px; }
 .fx { flex: 1; }
-.fxgrid { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.fxgrid { flex: 1; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .fxslot { border-radius: 8px; border: 1px solid #3A3E44; background: var(--panel-2); padding: 10px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
 .fxslot .top-line { display: flex; align-items: center; justify-content: space-between; }
 .fxslot b { font-size: 13px; font-weight: 600; }
@@ -467,3 +468,12 @@ td.grp { font-family: var(--font); font-size: 12px; color: var(--muted); }
 .auto-thr { display: grid; grid-template-columns: auto 1fr 54px; align-items: center; gap: 10px; }
 .auto-thr .mono { font-size: 12px; text-align: right; }
 .auto-thr input[type="range"]::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--mod) var(--a), #2A2D31 var(--a)); }
+
+/* Six FX slots: the whole slot is the drag handle, so the grip icon is hidden to leave room for the name */
+.fxslot { padding: 9px 8px; }
+.fxslot .grip { display: none; }
+.fxslot .top-line { gap: 4px; }
+.fxslot .top-line b { font-size: 12.5px; }
+.fx-btns { gap: 3px; }
+.fx-btns .icon-btn, .fxslot .power { width: 21px; height: 21px; }
+.fxslot .meta { font-size: 10px; overflow: hidden; text-overflow: ellipsis; }

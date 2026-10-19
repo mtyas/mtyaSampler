@@ -42,6 +42,15 @@ export function setupLayers(bridge, ui) {
     return ['var(--acc)', 'var(--mod)', '#9AA0A6', '#E08AC4', '#B9D35A'][gi % 5];
   };
   const commit = async () => { await bridge.setInstrument(clone(inst)); };
+  // Two clicks on the same thing within 400 ms (the first click re-draws the map, so the browser's
+  // own dblclick can't be relied on) open that sample in the editor on the Main page
+  let lastTap = { key: '', t: 0 };
+  const doubleTap = (key) => {
+    const now = performance.now(), hit = lastTap.key === key && now - lastTap.t < 400;
+    lastTap = { key: hit ? '' : key, t: now };
+    return hit;
+  };
+  const openInEditor = () => { if (ui.openEditor) ui.openEditor(); };
   const select = (i) => { sel = Math.max(0, Math.min(layers().length - 1, i)); rrPos = 0; renderAll(); };
 
   // ---------- Main page bits ----------
@@ -139,6 +148,7 @@ export function setupLayers(bridge, ui) {
     let start = null;
     z.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
+      if (doubleTap('zone' + i)) { select(i); openInEditor(); return; }
       if (i !== sel) { select(i); return; } // first click selects; drag the selected zone
       const r = z.getBoundingClientRect(), g = $('grid').getBoundingClientRect();
       const edge = 6;
@@ -227,7 +237,9 @@ export function setupLayers(bridge, ui) {
         `<td><div style="display:flex;gap:4px"><button class="ms" aria-label="Mute ${l.name}" aria-pressed="${!!l.muted}">M</button><button class="ms solo" aria-label="Solo ${l.name}" aria-pressed="${!!l.solo}">S</button></div></td>`;
       tr.querySelector('.name').textContent = l.name;
       tr.querySelector('.grp').textContent = l.group;
-      tr.querySelector('.name').onclick = () => select(i);
+      tr.querySelector('.name').onclick = () => { if (doubleTap('row' + i)) openInEditor(); select(i); };
+      tr.title = 'Double-click to edit this layer\'s sample on the Main page';
+      tr.ondblclick = (e) => { if (!e.target.closest('.ms')) { select(i); openInEditor(); } };
       const [m, s] = tr.querySelectorAll('.ms');
       m.onclick = () => { l.muted = !l.muted; commit(); };
       s.onclick = () => { l.solo = !l.solo; commit(); };
@@ -264,9 +276,9 @@ export function setupLayers(bridge, ui) {
         `<svg viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><path d="${miniWave(sel * 7 + r)}"/></svg><span class="meta"></span>`;
       d.querySelector('.meta').textContent = baseName(file);
       // Click a variation to edit its start, end and loop points on the Main page
-      d.title = 'Edit RR ' + (r + 1) + "'s points on the Main page";
+      d.title = 'Click to pick RR ' + (r + 1) + ' for the sample editor · double-click to open it';
       d.style.cursor = 'pointer';
-      d.onclick = () => { if (ui.selectVariation) ui.selectVariation(r); };
+      d.onclick = () => { if (ui.selectVariation) ui.selectVariation(r); if (doubleTap('rr' + r)) openInEditor(); };
       g.appendChild(d);
     });
   }

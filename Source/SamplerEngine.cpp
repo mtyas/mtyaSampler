@@ -168,6 +168,15 @@ float SamplerEngine::param (int index) const noexcept
     return p.range.convertFrom0to1 (juce::jlimit (0.0f, 1.0f, p.range.convertTo0to1 (value) + offset));
 }
 
+int SamplerEngine::getPlayheads (Playhead* out, int max) const noexcept
+{
+    const int n = juce::jmin (max, phCount.load (std::memory_order_acquire));
+    for (int k = 0; k < n; ++k)
+        out[k] = { phLayer[(size_t) k].load (std::memory_order_relaxed), phVariation[(size_t) k].load (std::memory_order_relaxed),
+                   phPosition[(size_t) k].load (std::memory_order_relaxed) };
+    return n;
+}
+
 void SamplerEngine::readBlockParams()
 {
     // Global sources: macros, mod wheel, aftertouch
@@ -180,18 +189,33 @@ void SamplerEngine::readBlockParams()
     source[Mod::modWheel] = modWheel;
     source[Mod::aftertouch] = aftertouch;
 
+    // Per-voice sources moving a whole-instrument knob follow the most recently started note
+    const Voice* newest = nullptr;
+    for (const auto& v : voices)
+        if (v.active && ! v.killing && ! v.isRelease && (newest == nullptr || v.order > newest->order))
+            newest = &v;
+    if (newest != nullptr)
+    {
+        source[Mod::env1] = newest->env1Value;
+        source[Mod::env2] = newest->env2Value;
+        source[Mod::env3] = newest->env3Value;
+        for (int i = 0; i < 4; ++i)
+            source[(size_t) (Mod::lfo1 + i)] = newest->lfos[i].value;
+        source[Mod::velocity] = (float) newest->velocity / 127.0f;
+        source[Mod::key] = (float) (newest->note - 60) / 60.0f;
+    }
+
     std::fill (paramOffset.begin(), paramOffset.end(), 0.0f);
     globalMod.fill (0.0f);
     if (map != nullptr)
         for (const auto& r : map->routes)
-            if (Mod::isGlobal (r.source))
-            {
-                const auto v = source[(size_t) r.source] * r.amount;
-                if (r.param >= 0 && r.param < (int) paramOffset.size())
-                    paramOffset[(size_t) r.param] += v;
-                else if (r.target >= 0)
-                    globalMod[(size_t) r.target] += v;
-            }
+        {
+            const auto v = source[(size_t) r.source] * r.amount;
+            if (r.param >= 0 && r.param < (int) paramOffset.size())
+                paramOffset[(size_t) r.param] += v;          // any source → a knob
+            else if (r.target >= 0 && Mod::isGlobal (r.source))
+                globalMod[(size_t) r.target] += v;           // global source → every voice's target
+        }
 
     auto get = [this] (int i, float fallback) { return param (i, fallback); };
     bp.playMode    = (PlayMode) juce::jlimit (0, 4, juce::roundToInt (get (ix.playMode, 0)));
@@ -284,6 +308,35 @@ void SamplerEngine::process (juce::AudioBuffer<float>& main, juce::AudioBuffer<f
     for (const auto& v : voices)
         count += v.active ? 1 : 0;
     activeVoiceCount.store (count);
+
+    // Playheads for the waveform, newest notes first
+    const Voice* list[maxPlayheads] {};
+    int n = 0;
+    for (const auto& v : voices)
+    {
+        if (! v.active || v.killing)
+            continue;
+        if (n < maxPlayheads)
+            list[n++] = &v;
+        else
+        {
+            int oldest = 0;
+            for (int k = 1; k < n; ++k)
+                if (list[k]->order < list[oldest]->order) oldest = k;
+            if (v.order > list[oldest]->order) list[oldest] = &v;
+        }
+    }
+    std::sort (list, list + n, [] (const Voice* a, const Voice* b) { return a->order > b->order; });
+    for (int k = 0; k < n; ++k)
+    {
+        const auto& v = *list[k];
+        const auto len = (double) juce::jmax (1, v.sample->audio.getNumSamples());
+        const auto at = v.mode == PlayMode::granular ? v.grainHead : v.pos;
+        phLayer[(size_t) k].store (v.layer->id, std::memory_order_relaxed);
+        phVariation[(size_t) k].store (v.variation, std::memory_order_relaxed);
+        phPosition[(size_t) k].store ((float) juce::jlimit (0.0, 1.0, at / len), std::memory_order_relaxed);
+    }
+    phCount.store (n, std::memory_order_release);
 }
 
 void SamplerEngine::resetRoundRobin (Layer::RRReset which)
@@ -608,6 +661,7 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
     const auto which = (size_t) juce::jlimit (0, (int) layer.samples.size() - 1, variation);
     v.sample = layer.samples[which].get();
     v.region = &layer.regions[which];
+    v.variation = (int) which;
     v.note = note;
     v.velocity = velocity;
     v.order = ++voiceOrder;
@@ -761,7 +815,7 @@ void SamplerEngine::triggerGrain (Voice& v)
 
 void SamplerEngine::startModulation (Voice& v)
 {
-    v.env2Value = v.env3Value = 0;
+    v.env1Value = v.env2Value = v.env3Value = 0;
     v.age = 0;
     v.samplesSinceMod = 0;
     for (size_t i = 0; i < 4; ++i)
@@ -792,6 +846,7 @@ void SamplerEngine::updateModulation (Voice& v, int rampSamples)
     // Sum the routes into each target: global part (this block) + this voice's sources
     std::array<float, Mod::numTargets> mod = globalMod;
     std::array<float, Mod::numSources> source {};
+    source[Mod::env1] = v.env1Value;
     source[Mod::env2] = v.env2Value;
     source[Mod::env3] = v.env3Value;
     for (int i = 0; i < 4; ++i)
@@ -998,7 +1053,8 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
         ++v.samplesSinceMod;
         v.age += 1.0;
 
-        auto gain = v.env.getNextSample() * v.volumeMod;
+        v.env1Value = v.env.getNextSample();
+        auto gain = v.env1Value * v.volumeMod;
         if (v.killing)
         {
             v.killGain -= killStep;

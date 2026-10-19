@@ -167,7 +167,8 @@ async function boot() {
     },
     // The selected layer changed (or its samples did): the sample editor follows it
     layerChanged: (l) => { if (regions) regions.load(l); },
-    selectVariation: (i) => { if (regions) regions.select(i); }
+    selectVariation: (i) => { if (regions) regions.select(i); },
+    openEditor: () => showPage('main')
   };
   let regions = null;
   const layers = setupLayers(bridge, ui);
@@ -175,6 +176,13 @@ async function boot() {
   setupAbout(bridge);
   regions = setupRegions(bridge, ui, displays);
   regions.load(layers.current());
+
+  // Playheads: the notes playing the sample shown in the editor
+  bridge.onMeters((m) => {
+    if (!m.playheads) return;
+    const { layerId, variation } = regions.current();
+    displays.setPlayheads(m.playheads.filter(([id, v]) => id === layerId && v === variation).map((p) => p[2]));
+  });
   ui.showGroup = layers.showGroup;
   create = setupCreate(bridge, ui);
   const octave = (d) => { baseOct = Math.max(-1, Math.min(6, baseOct + d)); buildKeys(); layers.renderMini(); };

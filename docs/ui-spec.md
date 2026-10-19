@@ -98,7 +98,7 @@ Events (C++ → JS):
 - `recorderState`: `{ status, phase, take, total, saved, lastSaved, count, phaseTime, phaseLen, recSec, maxSec, inDb, clip, voiceInUi, voicePack, peaks[] }`, 30 per second.
 - `recorderTake`: `{ index, file, path, lengthSec, peakDb, clipped, empty, skipped, peaks[], error? }`, once per take.
 - `preset`: `{ name, category, path }` when a preset is loaded, saved or reset.
-- `meters` also carries `rr` (`{ layerId: next round-robin position }`) and `previewing`.
+- `meters` also carries `rr` (`{ layerId: next round-robin position }`), `previewing`, and `playheads`: `[[layerId, variation, position 0–1], …]` for up to 8 playing notes, newest first (the waveform draws those of the shown sample).
 
 Parameters use JUCE's relays. In JS, `getSliderState(id)`, `getToggleState(id)` and `getComboBoxState(id)` are wrapped by `bridge.param(id)`, which offers `getValue`, `setValue`, `getNorm`, `setNorm`, `begin`, `end` and `onChange`.
 
@@ -161,7 +161,7 @@ Sound design (per voice: sample → filter with drive → modulated pan → Env 
 ]
 ```
 
-Sources: `env2`, `env3` (0…1), `lfo1`…`lfo4` (−1…1 × depth), `velocity` (0…1), `key` ((note − 60) / 60), and the global ones `macro1`…`macro4`, `modwheel`, `aftertouch` (0…1). Amount is −100…100 %.
+Sources: `env1`, `env2`, `env3` (0…1), `lfo1`…`lfo4` (−1…1 × depth), `velocity` (0…1), `key` ((note − 60) / 60, "key track"), and the global ones `macro1`…`macro4`, `modwheel`, `aftertouch` (0…1). Amount is −100…100 %. Any source can target any voice target or any float parameter; per-voice sources moving a parameter use the most recently started note.
 
 | Target | 100 % means |
 |---|---|
@@ -176,13 +176,13 @@ Sources: `env2`, `env3` (0…1), `lfo1`…`lfo4` (−1…1 × depth), `velocity`
 | `grain_spray` | ±100 % |
 | `grain_pitchrnd` | ±12 st |
 | `start` | sample start moves up to the end of the region (read at note-on) |
-| `param:<id>` | any float parameter, ± its whole range (global sources only) |
+| `param:<id>` | any float parameter (knob), ± its whole range |
 
 Global sources are applied once per block; per-voice ones per voice. An instrument without `"modRoutes"` gets the defaults (`defaultModRoutes()` in `Source/InstrumentMap.cpp`, `DEFAULT_ROUTES` in `ui/js/modmatrix.js`): Env 3 → grain size, LFO 1 → grain pos, LFO 2 → pan, LFO 3 → cutoff, LFO 4 → spray, and two targets for each macro. An empty list means nothing is modulated.
 
 ### FX chain
 
-`"fxOrder": ["sat", "crush", "chorus", "delay", "reverb"]` sets the order (dragged in the UI). Each effect fades in and out over 20 ms when switched and is skipped while off.
+`"fxOrder": ["sat", "crush", "chorus", "delay", "reverb", "tape"]` sets the order (dragged in the UI). Each effect fades in and out over 20 ms when switched and is skipped while off.
 
 | Effect | Parameters |
 |---|---|
@@ -191,6 +191,7 @@ Global sources are applied once per block; per-voice ones per voice. An instrume
 | Chorus | Mix, Rate, Depth, Feedback (`juce::dsp::Chorus`) |
 | Delay | Time or Sync + Division (host tempo), Feedback, Mix, Ping-pong, Tone (low-pass in the loop); time changes glide |
 | Reverb | Mix, Size, Damping, Width, Pre-delay (`juce::dsp::Reverb`) |
+| Tape | Wow (0.6 Hz + drift, ±2.5 ms), Flutter (7 + 12.5 Hz + jitter, ±0.3 ms) on an 8 ms Hermite-read delay line, Drive (asymmetric tanh, DC-blocked), Tone (low-pass), Mix (dry taken from the same line, so no comb filtering) |
 
 ## Parameters (from ui/params.json)
 

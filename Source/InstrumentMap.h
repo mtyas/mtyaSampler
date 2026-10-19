@@ -77,11 +77,12 @@ struct Layer
 // Modulation routing (the "modRoutes" list in the instrument JSON).
 namespace Mod
 {
-    // Sources. Global ones (macros, wheel, aftertouch) are the same for every voice and can also
-    // modulate any automatable parameter; per-voice ones only reach the voice targets below.
-    enum Source { env2, env3, lfo1, lfo2, lfo3, lfo4, macro1, macro2, macro3, macro4, modWheel, aftertouch, velocity, key, numSources };
+    // Sources. Global ones (macros, wheel, aftertouch) are the same for every voice. Every source can
+    // modulate the voice targets below (per note) and any float parameter ("param:<id>"); a
+    // per-voice source moving a parameter uses the most recently started note.
+    enum Source { env2, env3, lfo1, lfo2, lfo3, lfo4, macro1, macro2, macro3, macro4, modWheel, aftertouch, velocity, key, env1, numSources };
     inline constexpr const char* sourceIds[] = { "env2", "env3", "lfo1", "lfo2", "lfo3", "lfo4", "macro1", "macro2", "macro3", "macro4",
-                                                 "modwheel", "aftertouch", "velocity", "key" };
+                                                 "modwheel", "aftertouch", "velocity", "key", "env1" };
     inline bool isGlobal (int s) noexcept { return s >= macro1 && s <= aftertouch; }
 
     // Per-voice targets. What 100 % means for each is in docs/ui-spec.md (Modulation).
@@ -94,7 +95,7 @@ struct ModRoute
 {
     int source = 0;
     int target = -1;     // Mod::Target, or -1 when it modulates a parameter
-    int param = -1;      // index into the engine's parameter list ("param:<id>" targets)
+    int param = -1;      // index into the engine's parameter list ("param:<id>" targets, any source)
     float amount = 0;    // -1 … 1
 };
 
@@ -110,7 +111,7 @@ struct InstrumentMap
     int missingSamples = 0, loadedSamples = 0;
 
     std::vector<ModRoute> routes;
-    std::array<int, 5> fxOrder { 0, 1, 2, 3, 4 };   // 0 saturate, 1 bitcrush, 2 chorus, 3 delay, 4 reverb
+    std::array<int, 6> fxOrder { 0, 1, 2, 3, 4, 5 };   // 0 saturate, 1 bitcrush, 2 chorus, 3 delay, 4 reverb, 5 tape
 
     // Audio thread only: how many voices still point into this map.
     mutable int voiceRefs = 0;
@@ -158,4 +159,5 @@ std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, Sample
 juce::var defaultModRoutes();
 
 // The FX order ids used in the instrument JSON ("fxOrder").
-inline constexpr const char* fxIds[] = { "sat", "crush", "chorus", "delay", "reverb" };
+inline constexpr const char* fxIds[] = { "sat", "crush", "chorus", "delay", "reverb", "tape" };
+inline constexpr int numFxIds = 6;

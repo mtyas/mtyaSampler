@@ -130,13 +130,34 @@ export function setupRegions(bridge, ui, displays) {
     }
     return best;
   };
-  wave.addEventListener('pointermove', (e) => { if (!wave.hasPointerCapture(e.pointerId)) wave.style.cursor = nearest(e.clientX) ? 'ew-resize' : ''; });
+  // In Granular mode, dragging anywhere else inside start–end moves the grain position
+  const granular = () => bridge.param('play_mode').getValue() === 4;
+  const insideRegion = (clientX) => { const r = wave.getBoundingClientRect(), f = (clientX - r.left) / r.width; return f >= region.start && f <= region.end; };
+  wave.addEventListener('pointermove', (e) => {
+    if (wave.hasPointerCapture(e.pointerId)) return;
+    wave.style.cursor = nearest(e.clientX) || (granular() && insideRegion(e.clientX)) ? 'ew-resize' : '';
+  });
   wave.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || layerId === null) return;
     const key = nearest(e.clientX);
+    if (!key && granular() && insideRegion(e.clientX)) {
+      e.preventDefault();
+      const p = bridge.param('grn_pos');
+      const set = (ev) => {
+        const r = wave.getBoundingClientRect(), f = (ev.clientX - r.left) / r.width;
+        p.setValue(Math.max(0, Math.min(100, (f - region.start) / Math.max(1e-6, region.end - region.start) * 100)));
+      };
+      try { wave.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+      p.begin(); set(e);
+      const up = () => { p.end(); wave.removeEventListener('pointermove', set); wave.removeEventListener('pointerup', up); wave.removeEventListener('pointercancel', up); };
+      wave.addEventListener('pointermove', set);
+      wave.addEventListener('pointerup', up);
+      wave.addEventListener('pointercancel', up);
+      return;
+    }
     if (!key) return;
     e.preventDefault();
-    wave.setPointerCapture(e.pointerId);
+    try { wave.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
     dragging++;
     const move = (ev) => {
       const r = wave.getBoundingClientRect();

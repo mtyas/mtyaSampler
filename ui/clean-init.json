@@ -35,13 +35,21 @@
     "fx_crush_on": false,
     "fx_chorus_on": false,
     "fx_delay_on": false,
-    "fx_reverb_on": false
+    "fx_reverb_on": false,
+    "fx_tape_on": false
   },
   "instrument": {
     "version": 1,
     "velocityCurve": "linear",
     "modRoutes": [],
-    "fxOrder": ["sat", "crush", "chorus", "delay", "reverb"],
+    "fxOrder": [
+      "sat",
+      "crush",
+      "chorus",
+      "delay",
+      "reverb",
+      "tape"
+    ],
     "layers": []
   }
 }

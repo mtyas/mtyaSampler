@@ -520,6 +520,11 @@ void MtyaSamplerEditor::timerCallback()
     m->setProperty ("missing", proc.loader.missingSamples.load());
     m->setProperty ("rr", proc.loader.rrPositions());
     m->setProperty ("previewing", proc.clipPlayer.isPlaying());
+    SamplerEngine::Playhead heads[SamplerEngine::maxPlayheads];
+    juce::Array<juce::var> playheads;
+    for (int k = 0, n = proc.engine.getPlayheads (heads, SamplerEngine::maxPlayheads); k < n; ++k)
+        playheads.add (juce::Array<juce::var> { heads[k].layerId, heads[k].variation, heads[k].position });
+    m->setProperty ("playheads", playheads);
     browser.emitEventIfBrowserIsVisible ("meters", juce::var (m));
     browser.emitEventIfBrowserIsVisible ("recorderState", proc.recorder.getState());
     proc.clipPlayer.collectGarbage();

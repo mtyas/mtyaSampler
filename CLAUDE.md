@@ -16,7 +16,7 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
   - `Source/SampleLoader.*`: background thread that builds maps and deletes old ones.
   - `Source/SamplerEngine.*`: voices, round robin, trigger modes, voice modes, keyswitches, the five playback modes, Env 1–3, the 4 LFOs and the modulation matrix; Bus 2–4 outputs.
   - `Source/VoiceFilter.h`: the analogue-style filters (nonlinear ladder, saturating SVF and comb, 2× oversampled).
-  - `Source/FxChain.*`: the five effects in the instrument's order.
+  - `Source/FxChain.*`: the six effects (saturate, bitcrush, chorus, delay, reverb, tape) in the instrument's order.
   - `Source/PresetManager.*`, `Source/SampleTools.*`: presets, and the sample commands (import, auto-map, fill gaps, detect root, peaks…).
   - `tests/EngineTests.cpp` (`mtyaEngineTests`, 81 checks) and `tests/PluginTests.cpp` (`mtyaPluginTests`: the real processor with buses and saved state). Run both after engine changes.
   - How each layer field and playback mode behaves is written down in `docs/ui-spec.md` (Instrument JSON).

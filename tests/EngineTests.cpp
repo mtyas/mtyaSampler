@@ -87,7 +87,7 @@ namespace
                 { "env3_attack", 0.001f }, { "env3_decay", 0.1f }, { "env3_sustain", 50 }, { "env3_release", 0.01f },
                 { "flt_type", 1 }, { "flt_cutoff", 20000 }, { "flt_reso", 0 }, { "flt_drive", 0 }, { "flt_envamt", 0 },
                 { "macro1", 0 }, { "macro2", 0 }, { "macro3", 0 }, { "macro4", 0 },
-                { "fx_sat_on", 0 }, { "fx_crush_on", 0 }, { "fx_chorus_on", 0 }, { "fx_delay_on", 0 }, { "fx_reverb_on", 0 } };
+                { "fx_sat_on", 0 }, { "fx_crush_on", 0 }, { "fx_chorus_on", 0 }, { "fx_delay_on", 0 }, { "fx_reverb_on", 0 }, { "fx_tape_on", 0 } };
             for (const auto& [id, value] : v)
                 set (id, value);
             for (int i = 1; i <= 4; ++i)
@@ -556,6 +556,23 @@ int main()
         const auto hard = vel.rms (0.05, 0.2);
         check (near (hard / soft, 0.5, 0.03), "Velocity -> Volume -50 %: hard notes play at half level (" + juce::String (hard / soft, 2) + "×)");
 
+        // Env 1 (amp) as a source: its attack sweeps the pitch up
+        Rig e1 (withRoutes (R"([{ "source": "env1", "target": "pitch", "amount": 50 }])"));
+        e1.fp.set ("env1_attack", 0.5f);
+        e1.fp.set ("play_mode", 1);   // loop, so the sample (sped up by the sweep) keeps sounding
+        e1.on (60); e1.run (1.0);
+        check (e1.hz (0.02, 0.1) < 230 && near (e1.hz (0.7, 0.99), 400, 6), "Env 1 -> Pitch: the amp envelope's attack sweeps the pitch up (" + juce::String (e1.hz (0.02, 0.1), 0) + " -> " + juce::String (e1.hz (0.7, 0.99), 0) + " Hz)");
+
+        // An LFO can move any knob: LFO 1 (square) -> the Tune knob, following the newest note
+        Rig knobLfo (withRoutes (R"([{ "source": "lfo1", "target": "param:tune", "amount": 25 }])"));
+        knobLfo.fp.set ("lfo1_shape", 3);
+        knobLfo.fp.set ("lfo1_depth", 100);
+        knobLfo.fp.set ("lfo1_rate", 2);
+        knobLfo.on (60); knobLfo.run (0.5);
+        const auto up = knobLfo.hz (0.05, 0.24), down = knobLfo.hz (0.3, 0.49);
+        check (up > 260 && down < 160 && knobLfo.engine->param (knobLfo.engine->indexOf ("tune")) < -5.0f,
+               "LFO 1 -> param:tune moves the Tune knob itself (" + juce::String (up, 0) + " / " + juce::String (down, 0) + " Hz)");
+
         Rig wheel (withRoutes (R"([{ "source": "modwheel", "target": "pitch", "amount": 50 }])"));
         wheel.on (60);
         wheel.pendingMidi.addEvent (juce::MidiMessage::controllerEvent (1, 1, 127), 0);
@@ -601,12 +618,46 @@ int main()
         Rig order (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (click) + "]") },
                               R"(,"fxOrder":["reverb","delay","chorus","crush","sat"])"));
         order.run (0.01);
-        check ((order.engine->fxOrder() == std::array<int, 5> { 4, 3, 2, 1, 0 }), "the FX order comes from the instrument (\"fxOrder\")");
+        check ((order.engine->fxOrder() == std::array<int, 6> { 4, 3, 2, 1, 0, 5 }), "the FX order comes from the instrument (\"fxOrder\")");
 
         Rig partial (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (click) + "]") },
                                 R"(,"fxOrder":["delay","bogus","delay"])"));
         partial.run (0.01);
-        check ((partial.engine->fxOrder() == std::array<int, 5> { 3, 0, 1, 2, 4 }), "a partial or broken order keeps every effect once");
+        check ((partial.engine->fxOrder() == std::array<int, 6> { 3, 0, 1, 2, 4, 5 }), "a partial or broken order keeps every effect once");
+
+        // Tape: wow makes the pitch wander, flutter adds a fast wobble, drive squares off the wave
+        auto pitchSpread = [&] (float wow, float flutter)
+        {
+            Rig tape (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s1000) + "]") }));
+            tape.fp.set ("fx_tape_on", 1);
+            tape.fp.set ("fx_tape_wow", wow);
+            tape.fp.set ("fx_tape_flutter", flutter);
+            tape.fp.set ("fx_tape_drive", 0);
+            tape.fp.set ("fx_tape_tone", 20000);
+            tape.fx->reset();
+            tape.on (60); tape.run (1.0);
+            double lo = 1e9, hi = 0;
+            for (double t = 0.1; t < 0.95; t += 0.05)
+            {
+                const auto f = tape.hz (t, t + 0.05);
+                lo = juce::jmin (lo, f); hi = juce::jmax (hi, f);
+            }
+            return hi - lo;
+        };
+        const auto steady = pitchSpread (0, 0), wobbly = pitchSpread (100, 0), fluttery = pitchSpread (0, 100);
+        check (steady < 3 && wobbly > 6 && fluttery > 4, "tape wow and flutter make the pitch wander (spread " + juce::String (steady, 1) + " / "
+                   + juce::String (wobbly, 1) + " / " + juce::String (fluttery, 1) + " Hz)");
+
+        Rig driven (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") }));
+        driven.fp.set ("fx_tape_on", 1);
+        driven.fp.set ("fx_tape_wow", 0);
+        driven.fp.set ("fx_tape_flutter", 0);
+        driven.fp.set ("fx_tape_drive", 24);
+        driven.fx->reset();
+        driven.on (60); driven.run (0.4);
+        const auto crestDriven = driven.out.getMagnitude (0, (int) (0.1 * hostRate), (int) (0.3 * hostRate)) / driven.rms (0.1, 0.4);
+        // A clean sine is 1.41; tape's saturation is asymmetric (even harmonics), so it doesn't go fully square
+        check (crestDriven < 1.32f, "tape drive saturates (crest factor 1.41 -> " + juce::String (crestDriven, 2) + ")");
 
         Rig crush (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") }));
         crush.fp.set ("fx_crush_on", 1);
@@ -617,6 +668,19 @@ int main()
         for (int i = (int) (0.1 * hostRate); i < (int) (0.3 * hostRate); ++i)
             levels.add (juce::roundToInt (crush.out.getSample (0, i) * 1000));
         check (levels.size() <= 4, "a 2-bit crush leaves only a few output levels (" + juce::String (levels.size()) + ")");
+    }
+
+    std::cout << "Playheads" << std::endl;
+    {
+        Rig rig (instrument ({ layer (juce::String ("\"id\":42,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") }));
+        rig.on (60); rig.run (0.25);
+        SamplerEngine::Playhead heads[SamplerEngine::maxPlayheads];
+        const int n = rig.engine->getPlayheads (heads, SamplerEngine::maxPlayheads);
+        // 0.25 s into a 1 s file at the same pitch
+        check (n == 1 && heads[0].layerId == 42 && heads[0].variation == 0 && near (heads[0].position, 0.25, 0.02),
+               "the playing note's position is reported for the waveform (" + juce::String (n > 0 ? heads[0].position : -1.0f, 3) + ")");
+        rig.off (60); rig.run (0.1);
+        check (rig.engine->getPlayheads (heads, SamplerEngine::maxPlayheads) == 0, "and disappears when the note ends");
     }
 
     std::cout << "Outputs and normalize" << std::endl;

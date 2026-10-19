@@ -65,7 +65,13 @@ public:
     const juce::StringArray& paramIds() const noexcept { return ids; }
 
     // Audio thread: the current instrument's FX order.
-    std::array<int, 5> fxOrder() const noexcept { return map != nullptr ? map->fxOrder : std::array<int, 5> { 0, 1, 2, 3, 4 }; }
+    std::array<int, 6> fxOrder() const noexcept { return map != nullptr ? map->fxOrder : std::array<int, 6> { 0, 1, 2, 3, 4, 5 }; }
+
+    // Message thread: where the playing notes are in their samples (newest first), for the
+    // waveform's playhead. Returns how many were written.
+    struct Playhead { int layerId = 0, variation = 0; float position = 0; };
+    static constexpr int maxPlayheads = 8;
+    int getPlayheads (Playhead* out, int max) const noexcept;
 
     // Any thread: where an RR group's counter is (for the inspector's Position readout).
     int rrPosition (int group) const noexcept { return group >= 0 && group < maxRRGroups ? rrShown[(size_t) group].load (std::memory_order_relaxed) : 0; }
@@ -85,6 +91,7 @@ private:
         const Layer* layer = nullptr;
         const SampleData* sample = nullptr;
         const Layer::Region* region = nullptr;   // this variation's start/end/loop points
+        int variation = 0;
 
         int note = 60, velocity = 100;   // velocity after the curve
         juce::uint64 order = 0;          // start order, for "oldest"
@@ -112,7 +119,7 @@ private:
 
         // modulation
         juce::ADSR env2, env3;
-        float env2Value = 0, env3Value = 0;
+        float env1Value = 0, env2Value = 0, env3Value = 0;
         struct LfoState { double phase = 0; float value = 0, held = 0; } lfos[4];
         double age = 0;                  // samples since the note started (LFO fade-in)
         int samplesSinceMod = 0;
@@ -224,6 +231,11 @@ private:
     static constexpr int maxRRGroups = 256;
     std::array<int, maxRRGroups> rrCounter {}, rrLast {};
     std::array<std::atomic<int>, maxRRGroups> rrShown {};
+
+    // Playheads published at the end of each block (audio thread writes, message thread reads)
+    std::array<std::atomic<int>, maxPlayheads> phLayer {}, phVariation {};
+    std::array<std::atomic<float>, maxPlayheads> phPosition {};
+    std::atomic<int> phCount { 0 };
     double samplesSinceNoteOn = 0;
     bool idleResetDone = true, wasPlaying = false;
 

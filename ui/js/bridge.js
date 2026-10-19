@@ -97,6 +97,7 @@ export async function createBridge() {
   const presetEv = new Emitter();
   let instrument = null;   // { version, velocityCurve, layers: [...] }
   let writesInFlight = 0, refetchAfterWrites = false;
+  const mockHeld = new Map();   // preview: note → { start, vel }
 
   const native = (name) => (Juce ? Juce.getNativeFunction(name) : null);
 
@@ -124,9 +125,18 @@ export async function createBridge() {
     mockRec = new MockRecorder();
     mockRec.on('state', (st) => recStateEv.emit(st));
     mockRec.on('take', (t) => recTakeEv.emit(t));
-    // Fake meters + stats so the preview feels alive
+    // Fake meters + stats so the preview feels alive. Held keys get a playhead moving through a
+    // pretend 4.8 s sample in every layer that covers the note and velocity, like real voices.
     let t = 0;
-    setInterval(() => { t += 0.1; meterEv.emit({ l: 0.55 + 0.1 * Math.sin(t), r: 0.5 + 0.1 * Math.cos(t * 1.3), voices: 6, cpu: 4.1 }); }, 80);
+    setInterval(() => {
+      t += 0.1;
+      const now = performance.now();
+      const playheads = [];
+      for (const [note, { start, vel }] of mockHeld)
+        for (const l of instrument?.layers || [])
+          if (note >= l.lo && note <= l.hi && vel >= l.vlo && vel <= l.vhi) playheads.push([l.id, 0, Math.min(1, (now - start) / 4800)]);
+      meterEv.emit({ l: 0.55 + 0.1 * Math.sin(t), r: 0.5 + 0.1 * Math.cos(t * 1.3), voices: 6, cpu: 4.1, playheads });
+    }, 80);
   }
 
   // ---------- preview-mode presets (localStorage), same results as Source/PresetManager ----------
@@ -220,8 +230,8 @@ export async function createBridge() {
     onInstrument: (fn) => layersEv.on(fn),
     onMeters: (fn) => meterEv.on(fn),
     onPreset: (fn) => presetEv.on(fn),
-    async noteOn(note, vel) { if (inPlugin) await native('noteOn')(note, vel); },
-    async noteOff(note) { if (inPlugin) await native('noteOff')(note); },
+    async noteOn(note, vel) { if (inPlugin) await native('noteOn')(note, vel); else mockHeld.set(note, { start: performance.now(), vel }); },
+    async noteOff(note) { if (inPlugin) await native('noteOff')(note); else mockHeld.delete(note); },
     async wheel(kind, value) { if (inPlugin) await native('wheel')(kind, value); },
     // Sample-recording assistant (Create page). Commands: start(plan) pause resume retake skip next goto(i) stop monitor(bool)
     async recorder(cmd, arg) {

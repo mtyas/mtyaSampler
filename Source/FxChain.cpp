@@ -30,6 +30,9 @@ FxChain::FxChain (const SamplerEngine& e) : engine (e)
     ix.delayTone = i ("fx_delay_tone");
     ix.reverbMix = i ("fx_reverb_mix");   ix.reverbSize = i ("fx_reverb_size"); ix.reverbDamp = i ("fx_reverb_damp");
     ix.reverbWidth = i ("fx_reverb_width"); ix.reverbPredelay = i ("fx_reverb_predelay");
+    ix.on[tapeFx] = i ("fx_tape_on");
+    ix.tapeDrive = i ("fx_tape_drive");   ix.tapeWow = i ("fx_tape_wow");       ix.tapeFlutter = i ("fx_tape_flutter");
+    ix.tapeTone = i ("fx_tape_tone");     ix.tapeMix = i ("fx_tape_mix");
 }
 
 void FxChain::prepare (double sampleRate, int maxBlockSize)
@@ -40,6 +43,7 @@ void FxChain::prepare (double sampleRate, int maxBlockSize)
     wet.setSize (2, block);
     delayLine.setSize (2, (int) (sr * 2.5) + 4);
     predelayLine.setSize (2, (int) (sr * 0.26) + 4);
+    tapeLine.setSize (2, (int) (sr * 0.05) + 8);   // 50 ms: room for the base delay plus the wobble
 
     juce::dsp::ProcessSpec spec { sr, (juce::uint32) block, 2 };
     chorus.prepare (spec);
@@ -66,6 +70,10 @@ void FxChain::reset()
     reverb.reset();
     predelayLine.clear();
     predelayWrite = 0;
+    tapeLine.clear();
+    tapeWrite = 0;
+    wowDrift = wowDriftTarget = flutterJitter = 0;
+    for (auto* a : { tapeLp, tapeDcX, tapeDcY }) a[0] = a[1] = 0;
     for (int i = 0; i < numFx; ++i)
         onGain[i].setCurrentAndTargetValue (p (ix.on[i], 0) >= 0.5f ? 1.0f : 0.0f);
 }
@@ -95,6 +103,7 @@ void FxChain::process (juce::AudioBuffer<float>& buffer, double bpm) noexcept
             case chorusFx: processChorus (buffer, n); break;
             case delayFx:  processDelay (buffer, n, bpm); break;
             case reverbFx: processReverb (buffer, n); break;
+            case tapeFx:   processTape (buffer, n); break;
             default: break;
         }
 
@@ -116,6 +125,7 @@ void FxChain::process (juce::AudioBuffer<float>& buffer, double bpm) noexcept
                 if (fx == delayFx) { delayLine.clear(); delayLp[0] = delayLp[1] = 0; delayFresh = true; }
                 if (fx == reverbFx) { reverb.reset(); predelayLine.clear(); }
                 if (fx == chorusFx) chorus.reset();
+                if (fx == tapeFx) tapeLine.clear();
             }
         }
     }
@@ -276,5 +286,78 @@ void FxChain::processReverb (juce::AudioBuffer<float>& buffer, int n) noexcept
         const auto* w = wet.getReadPointer (ch);
         for (int i = 0; i < n; ++i)
             d[i] += mix * (w[i] - d[i]);
+    }
+}
+
+void FxChain::processTape (juce::AudioBuffer<float>& buffer, int n) noexcept
+{
+    const auto drive = juce::Decibels::decibelsToGain (p (ix.tapeDrive, 6));
+    const auto wow = p (ix.tapeWow, 30) * 0.01f;
+    const auto flutter = p (ix.tapeFlutter, 20) * 0.01f;
+    const auto mix = p (ix.tapeMix, 100) * 0.01f;
+    const auto toneCoef = 1.0f - std::exp (-juce::MathConstants<float>::twoPi * p (ix.tapeTone, 12000) / (float) sr);
+    const auto msToSamples = (float) sr * 0.001f;
+
+    // Wow: a slow wobble (0.6 Hz) that drifts, up to ±2.5 ms. Flutter: faster (7 Hz + 12.5 Hz) with jitter, up to ±0.3 ms.
+    const auto baseDelay = 8.0f * msToSamples;
+    const auto wowDepth = wow * 2.5f * msToSamples;
+    const auto flutterDepth = flutter * 0.3f * msToSamples;
+    const auto twoPi = juce::MathConstants<double>::twoPi;
+    const int length = tapeLine.getNumSamples();
+    const auto makeup = 1.0f / std::sqrt (drive);
+    constexpr float bias = 0.15f;   // asymmetric: tape adds even harmonics
+    const auto biasOffset = std::tanh (bias);
+
+    auto* l = buffer.getWritePointer (0);
+    auto* r = buffer.getWritePointer (1);
+    for (int i = 0; i < n; ++i)
+    {
+        // Slow random drift for the wow, a new target every ~0.4 s
+        if (--driftCountdown <= 0)
+        {
+            driftCountdown = (int) (sr * 0.4);
+            wowDriftTarget = tapeRandom.nextFloat() * 2.0f - 1.0f;
+        }
+        wowDrift += 0.00002f * (wowDriftTarget - wowDrift);
+        flutterJitter += 0.002f * ((tapeRandom.nextFloat() * 2.0f - 1.0f) - flutterJitter);
+
+        wowPhase += 0.6 / sr;
+        flutterPhase += 7.0 / sr;
+        flutterPhase2 += 12.5 / sr;
+        if (wowPhase >= 1.0) wowPhase -= 1.0;
+        if (flutterPhase >= 1.0) flutterPhase -= 1.0;
+        if (flutterPhase2 >= 1.0) flutterPhase2 -= 1.0;
+        const auto wobble = wowDepth * (0.7f * (float) std::sin (twoPi * wowPhase) + 0.3f * wowDrift)
+                          + flutterDepth * (0.6f * (float) std::sin (twoPi * flutterPhase) + 0.25f * (float) std::sin (twoPi * flutterPhase2) + 0.15f * flutterJitter);
+        const auto delay = juce::jlimit (2.0f, (float) (length - 4), baseDelay + wobble);
+
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            auto* line = tapeLine.getWritePointer (ch);
+            auto& x = ch == 0 ? l[i] : r[i];
+            line[tapeWrite] = x;
+
+            // 4-point Hermite read of the wobbling delay
+            auto readPos = (float) tapeWrite - delay;
+            if (readPos < 0) readPos += (float) length;
+            const int i0 = (int) readPos;
+            const auto f = readPos - (float) i0;
+            auto at = [line, length] (int k) { return line[((k % length) + length) % length]; };
+            const auto xm1 = at (i0 - 1), x0 = at (i0), x1 = at (i0 + 1), x2 = at (i0 + 2);
+            const auto c1 = 0.5f * (x1 - xm1), c2 = xm1 - 2.5f * x0 + 2.0f * x1 - 0.5f * x2, c3 = 0.5f * (x2 - xm1) + 1.5f * (x0 - x1);
+            auto y = ((c3 * f + c2) * f + c1) * f + x0;
+
+            // Saturation (asymmetric, then DC removed), then the tape's high-frequency loss
+            y = (std::tanh (y * drive + bias) - biasOffset) * makeup;
+            const auto dc = y - tapeDcX[ch] + 0.995f * tapeDcY[ch];
+            tapeDcX[ch] = y;
+            tapeDcY[ch] = dc;
+            tapeLp[ch] += toneCoef * (dc - tapeLp[ch]);
+
+            // The dry part comes from the same line without the wobble, so a partial mix doesn't comb-filter
+            const auto aligned = at (tapeWrite - (int) baseDelay);
+            x = aligned + mix * (tapeLp[ch] - aligned);
+        }
+        tapeWrite = (tapeWrite + 1) % length;
     }
 }

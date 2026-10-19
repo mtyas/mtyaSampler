@@ -86,6 +86,22 @@ export function setupDisplays(bridge) {
 
   // ---------- grain cloud ----------
   $('g-wave').setAttribute('d', wavePath(130, 260, 32, 30, 30, 7.13));
+  // Click or drag in the cloud display to move the grain position
+  const cloud = $('g-wave').closest('.well');
+  cloud.style.cursor = 'ew-resize';
+  cloud.title = 'Drag to move the grain position';
+  cloud.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const p = P('grn_pos');
+    const set = (ev) => { const r = cloud.getBoundingClientRect(); p.setValue(Math.max(0, Math.min(100, (ev.clientX - r.left) / r.width * 100))); };
+    try { cloud.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    p.begin(); set(e);
+    const move = (ev) => set(ev);
+    const up = () => { p.end(); cloud.removeEventListener('pointermove', move); cloud.removeEventListener('pointerup', up); cloud.removeEventListener('pointercancel', up); };
+    cloud.addEventListener('pointermove', move);
+    cloud.addEventListener('pointerup', up);
+    cloud.addEventListener('pointercancel', up);
+  });
   on(['grn_pos', 'grn_spray', 'grn_density', 'grn_size', 'grn_freeze'], () => {
     const cx = val('grn_pos') / 100 * 260, w = 12 + val('grn_spray') * 1.4;
     const n = Math.round(6 + val('grn_density') * 0.8);
@@ -170,6 +186,10 @@ export function setupDisplays(bridge) {
     setPeaks(peaks) { $('w-path').setAttribute('d', peaks && peaks.length ? peaksPath(peaks) : ''); },
     setPlaceholderWave() { $('w-path').setAttribute('d', wavePath()); },
     setRegion(r) { region = { ...r }; drawWave(); },
+    // Where the notes playing the shown sample are (fractions of the file): white lines on the waveform
+    setPlayheads(positions) {
+      $('w-heads').setAttribute('d', positions.map((p) => `M${(p * 1000).toFixed(1)} 0 V200`).join(' '));
+    },
     setDuration
   };
 }

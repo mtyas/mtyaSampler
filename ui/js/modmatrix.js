@@ -1,16 +1,16 @@
 // Modulation routing: which targets each envelope, LFO, macro and controller moves.
 // Stored in the instrument JSON as "modRoutes": [{ source, target, amount }] (amount −100…100).
-// Targets are voice targets (below) or "param:<id>" for any float parameter; parameter targets
-// only work from sources that are the same for every voice (macros, mod wheel, aftertouch).
+// Targets are voice targets (below, moved per note) or "param:<id>" for any float parameter. Envelopes,
+// LFOs, velocity and key moving a parameter (a knob shared by all notes) follow the newest note.
 // The engine side is Source/InstrumentMap.* (parseRoutes) and Source/SamplerEngine.cpp.
 
 import { popover, modal, h } from './overlay.js';
 
 export const SOURCES = [
-  ['env2', 'Env 2 (Filter)'], ['env3', 'Env 3 (Mod)'],
+  ['env1', 'Env 1 (Amp)'], ['env2', 'Env 2 (Filter)'], ['env3', 'Env 3 (Mod)'],
   ['lfo1', 'LFO 1'], ['lfo2', 'LFO 2'], ['lfo3', 'LFO 3'], ['lfo4', 'LFO 4'],
   ['macro1', 'Macro 1'], ['macro2', 'Macro 2'], ['macro3', 'Macro 3'], ['macro4', 'Macro 4'],
-  ['modwheel', 'Mod wheel'], ['aftertouch', 'Aftertouch'], ['velocity', 'Velocity'], ['key', 'Key (from C3)']
+  ['modwheel', 'Mod wheel'], ['aftertouch', 'Aftertouch'], ['velocity', 'Velocity'], ['key', 'Key track (pitch, from C3)']
 ];
 const GLOBAL = new Set(['macro1', 'macro2', 'macro3', 'macro4', 'modwheel', 'aftertouch']);
 
@@ -74,8 +74,8 @@ export function setupModMatrix(bridge, ui) {
     const voice = h('optgroup', { label: 'Voice' });
     VOICE_TARGETS.forEach(([id, label, range]) => voice.append(h('option', { value: id }, `${label}  (${range})`)));
     sel.append(voice);
-    if (GLOBAL.has(source)) {
-      // Any automatable parameter, grouped like the UI
+    {
+      // Any knob (float parameter), grouped like the UI
       const groups = new Map();
       floatParams.forEach((p) => { if (!groups.has(p.group)) groups.set(p.group, []); groups.get(p.group).push(p); });
       groups.forEach((list, g) => {
@@ -126,7 +126,7 @@ export function setupModMatrix(bridge, ui) {
         const next = VOICE_TARGETS.map(([id]) => id).find((id) => !used.has(id)) ?? 'pitch';
         body.append(h('div', { class: 'pop-foot' },
           h('button', { class: 'btn', onclick: () => { all.push({ source, target: next, amount: 50 }); save(all).then(() => { render(); api.place(); }); } }, '+ Add target'),
-          h('span', { class: 'meta' }, GLOBAL.has(source) ? 'Can also move any parameter' : 'Moves each voice on its own')));
+          h('span', { class: 'meta' }, GLOBAL.has(source) ? 'Same for every note' : 'Voice targets move each note; knobs follow the newest note')));
       };
       render();
     }, { width: 400 });
@@ -144,11 +144,7 @@ export function setupModMatrix(bridge, ui) {
           const src = h('select', { 'aria-label': 'Source' });
           SOURCES.forEach(([id]) => src.append(h('option', { value: id }, sourceLabel(id))));
           src.value = r.source;
-          src.onchange = () => {
-            all[i].source = src.value;
-            if (!GLOBAL.has(src.value) && all[i].target.startsWith('param:')) all[i].target = 'cutoff';
-            save(all).then(render);
-          };
+          src.onchange = () => { all[i].source = src.value; save(all).then(render); };
           table.append(h('div', { class: 'matrix-row' }, src,
             targetSelect(r.source, r.target, (t) => { all[i].target = t; save(all); }),
             amountControl(r.amount, (v) => { all[i].amount = v; save(all); }),
@@ -177,17 +173,13 @@ export function setupModMatrix(bridge, ui) {
   const envTag = document.getElementById('env-tag'), lfoTag = document.getElementById('lfo-dest');
   const macroBtns = [...document.querySelectorAll('#macro-routes [data-macro]')];
   function refresh() {
-    if (envN === 1) { envTag.textContent = 'Amp'; envTag.disabled = true; envTag.title = 'Env 1 always shapes the level'; }
-    else {
-      envTag.disabled = false;
-      envTag.textContent = summary('env' + envN);
-      envTag.title = 'Choose what Env ' + envN + ' modulates' + (envN === 2 ? ' (it also moves the cutoff through Env Amt)' : '');
-    }
+    envTag.textContent = summary('env' + envN);
+    envTag.title = 'Choose what Env ' + envN + ' modulates' + (envN === 1 ? ' (it always shapes the level too)' : envN === 2 ? ' (it also moves the cutoff through Env Amt)' : '');
     lfoTag.textContent = summary('lfo' + lfoN);
     lfoTag.title = 'Choose what LFO ' + lfoN + ' modulates';
     macroBtns.forEach((b) => { b.textContent = summary('macro' + b.dataset.macro); b.title = 'Choose what ' + sourceLabel('macro' + b.dataset.macro) + ' controls'; });
   }
-  envTag.onclick = () => envN > 1 && openSource(envTag, 'env' + envN);
+  envTag.onclick = () => openSource(envTag, 'env' + envN);
   lfoTag.onclick = () => openSource(lfoTag, 'lfo' + lfoN);
   macroBtns.forEach((b) => { b.onclick = () => openSource(b, 'macro' + b.dataset.macro); });
   document.getElementById('open-matrix').onclick = openMatrix;

@@ -10,9 +10,10 @@ const FX = {
   crush:  { name: 'Bitcrush', on: 'fx_crush_on', amount: 'fx_crush_bits', knobs: ['fx_crush_bits', 'fx_crush_rate', 'fx_crush_mix'] },
   chorus: { name: 'Chorus', on: 'fx_chorus_on', amount: 'fx_chorus_mix', knobs: ['fx_chorus_mix', 'fx_chorus_rate', 'fx_chorus_depth', 'fx_chorus_fb'] },
   delay:  { name: 'Delay', on: 'fx_delay_on', amount: 'fx_delay_fb', knobs: ['fx_delay_time', 'fx_delay_fb', 'fx_delay_mix', 'fx_delay_tone'], toggles: ['fx_delay_sync', 'fx_delay_pingpong'], select: 'fx_delay_div' },
-  reverb: { name: 'Reverb', on: 'fx_reverb_on', amount: 'fx_reverb_mix', knobs: ['fx_reverb_mix', 'fx_reverb_size', 'fx_reverb_damp', 'fx_reverb_width', 'fx_reverb_predelay'] }
+  reverb: { name: 'Reverb', on: 'fx_reverb_on', amount: 'fx_reverb_mix', knobs: ['fx_reverb_mix', 'fx_reverb_size', 'fx_reverb_damp', 'fx_reverb_width', 'fx_reverb_predelay'] },
+  tape:   { name: 'Tape', on: 'fx_tape_on', amount: 'fx_tape_drive', knobs: ['fx_tape_wow', 'fx_tape_flutter', 'fx_tape_drive', 'fx_tape_tone', 'fx_tape_mix'] }
 };
-export const DEFAULT_ORDER = ['sat', 'crush', 'chorus', 'delay', 'reverb'];
+export const DEFAULT_ORDER = ['sat', 'crush', 'chorus', 'delay', 'reverb', 'tape'];
 
 const GRIP = '<svg width="10" height="14" viewBox="0 0 10 14" aria-hidden="true"><g fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="7" cy="11" r="1.2"/></g></svg>';
 const PENCIL = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 10 L2.6 7.6 L8 2.2 L9.8 4 L4.4 9.4 Z M7 3.2 L8.8 5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
@@ -89,14 +90,16 @@ export function setupFxChain(bridge) {
         const sync = bridge.param('fx_delay_sync').getValue();
         text = (sync ? bridge.param('fx_delay_div').spec.choices[bridge.param('fx_delay_div').getValue()] : fmt(bridge.param('fx_delay_time').spec, bridge.param('fx_delay_time').getValue())) + ' · FB ' + fmt(s, amtP.getValue());
       }
+      if (key === 'tape') text = `Wow ${Math.round(bridge.param('fx_tape_wow').getValue())} · Flut ${Math.round(bridge.param('fx_tape_flutter').getValue())} · ${fmt(s, amtP.getValue())}`;
       meta.textContent = text;
     };
     [onP, amtP].forEach((p) => p.onChange(upd));
     if (key === 'delay') ['fx_delay_sync', 'fx_delay_div', 'fx_delay_time'].forEach((id) => bridge.param(id).onChange(upd));
+    if (key === 'tape') ['fx_tape_wow', 'fx_tape_flutter'].forEach((id) => bridge.param(id).onChange(upd));
     upd();
 
     const edit = slot.querySelector('.edit');
-    edit.onclick = () => popover(edit, fx.name, (body) => body.append(editorFor(key)), { width: key === 'reverb' ? 420 : 360 });
+    edit.onclick = () => popover(edit, fx.name, (body) => body.append(editorFor(key)), { width: key === 'reverb' || key === 'tape' ? 420 : 360 });
     makeDraggable(slot);
     return slot;
   }

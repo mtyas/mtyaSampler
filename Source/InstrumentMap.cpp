@@ -256,10 +256,7 @@ static void parseRoutes (const juce::var& list, const juce::StringArray& paramId
         const auto target = r["target"].toString();
         if (target.startsWith ("param:"))
         {
-            // Parameter targets only make sense for sources that are the same for every voice.
             route.param = paramIds.indexOf (target.substring (6));
-            if (! Mod::isGlobal (route.source))
-                route.param = -1;
         }
         else
             for (int i = 0; i < Mod::numTargets; ++i)
@@ -287,10 +284,10 @@ std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, Sample
         // Keep any valid order; effects missing from the list keep their place at the end.
         std::vector<int> seen;
         for (const auto& id : *order)
-            for (int i = 0; i < 5; ++i)
+            for (int i = 0; i < numFxIds; ++i)
                 if (id.toString() == fxIds[i] && std::find (seen.begin(), seen.end(), i) == seen.end())
                     seen.push_back (i);
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < numFxIds; ++i)
             if (std::find (seen.begin(), seen.end(), i) == seen.end())
                 seen.push_back (i);
         std::copy (seen.begin(), seen.end(), map->fxOrder.begin());

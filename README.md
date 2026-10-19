@@ -10,8 +10,8 @@ A free, open-source sampler instrument (VST3, CLAP and Standalone) for sound des
 
 - **Five playback modes:** one-shot, loop (with crossfade), ping-pong, slice (16 slices across the keys) and granular (size, density, spray, pitch randomness, freeze).
 - **Analogue-style filters:** a transistor-ladder LP24, LP12, BP, HP and a comb, all oversampled, all able to self-oscillate at full resonance.
-- **Modulation:** three envelopes, four LFOs, four macros, mod wheel, aftertouch, velocity and key, routed to any of 12 per-note targets or (macros and controllers) to any parameter.
-- **FX chain:** saturate, bitcrush, chorus, delay (tempo sync, ping-pong) and reverb. Drag them into any order, with full settings for each.
+- **Modulation:** three envelopes, four LFOs, four macros, mod wheel, aftertouch, velocity and key tracking, routed to any of 12 per-note targets or to any knob.
+- **FX chain:** saturate, bitcrush, chorus, delay (tempo sync, ping-pong), reverb and tape (wow, flutter, drive). Drag them into any order, with full settings for each.
 - **Multi-sample layers:** key and velocity zones with crossfades, round robin (cycle, random, no-repeat), release/legato/first-note triggers, choke groups, mono/legato with glide, keyswitches, and outputs to Bus 2–4.
 - **Sample tools:** import a folder or drop files, auto-map by name (`Piano_C3_mf_rr2.wav`), fill gaps, detect root pitch, learn key range, snap to zero crossings, non-destructive normalize.
 - **Create page:** a recording assistant that announces each note, plays a reference tone, counts you in, records, trims and maps every take. It can also play a MIDI instrument on its own and record it.
