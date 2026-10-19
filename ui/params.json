@@ -8,6 +8,9 @@
     { "id": "loop_xfade", "name": "Loop Crossfade", "label": "X-Fade", "type": "float", "min": 0, "max": 500, "default": 22, "skew": 0.4, "unit": "ms", "group": "Sample" },
     { "id": "tune", "name": "Tune", "type": "float", "min": -24, "max": 24, "step": 1, "default": 0, "unit": "st", "bipolar": true, "group": "Sample" },
     { "id": "fine", "name": "Fine Tune", "label": "Fine", "type": "float", "min": -100, "max": 100, "step": 1, "default": 12, "unit": "ct", "bipolar": true, "group": "Sample" },
+    { "id": "stretch_mode", "name": "Stretch Mode", "label": "Stretch", "type": "choice", "choices": ["Resample", "Stretch", "Formant"], "default": 0, "group": "Sample" },
+    { "id": "time_speed", "name": "Playback Speed", "label": "Speed", "type": "float", "min": 10, "max": 400, "default": 100, "skew": 0.5, "unit": "%", "group": "Sample" },
+    { "id": "formant", "name": "Formant Shift", "label": "Formant", "type": "float", "min": -12, "max": 12, "default": 0, "unit": "st", "decimals": 1, "bipolar": true, "group": "Sample" },
 
     { "id": "grn_pos", "name": "Grain Position", "label": "Position", "type": "float", "min": 0, "max": 100, "default": 52.5, "unit": "%", "decimals": 1, "group": "Granular" },
     { "id": "grn_size", "name": "Grain Size", "label": "Size", "type": "float", "min": 5, "max": 500, "default": 84, "skew": 0.5, "unit": "ms", "group": "Granular" },

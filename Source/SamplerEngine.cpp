@@ -63,6 +63,7 @@ SamplerEngine::SamplerEngine (ParamList p) : params (std::move (p))
 
     auto i = [this] (const juce::String& id) { return ids.indexOf (id); };
     ix.playMode = i ("play_mode");     ix.loopXfade = i ("loop_xfade");
+    ix.stretchMode = i ("stretch_mode"); ix.timeSpeed = i ("time_speed"); ix.formant = i ("formant");
     ix.tune = i ("tune");              ix.fine = i ("fine");
     ix.grnPos = i ("grn_pos");         ix.grnSize = i ("grn_size");      ix.grnDensity = i ("grn_density");
     ix.grnSpray = i ("grn_spray");     ix.grnPitchRnd = i ("grn_pitchrnd"); ix.grnFreeze = i ("grn_freeze");
@@ -220,6 +221,9 @@ void SamplerEngine::readBlockParams()
     auto get = [this] (int i, float fallback) { return param (i, fallback); };
     bp.playMode    = (PlayMode) juce::jlimit (0, 4, juce::roundToInt (get (ix.playMode, 0)));
     bp.loopXfadeMs = get (ix.loopXfade, 0);
+    bp.stretchMode = juce::jlimit (0, 2, juce::roundToInt (get (ix.stretchMode, 0)));
+    bp.speed       = juce::jlimit (0.05f, 8.0f, get (ix.timeSpeed, 100) * 0.01f);
+    bp.formantRatio = std::exp2 (get (ix.formant, 0) / 12.0f);
     bp.tuneSemis   = get (ix.tune, 0) + get (ix.fine, 0) * 0.01f + pitchBendSemis;
     bp.grnPos      = get (ix.grnPos, 50) * 0.01f;
     bp.grnSizeMs   = juce::jmax (1.0f, get (ix.grnSize, 80));
@@ -702,6 +706,9 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
     v.pos = v.regionStart + juce::jlimit (0.0, 0.999, (double) v.startMod) * (v.regionEnd - v.regionStart);
     v.grainHead = v.regionStart + bp.grnPos * (v.regionEnd - v.regionStart);
     v.untilNextGrain = 0;
+    v.stretch = v.mode == PlayMode::granular ? 0 : bp.stretchMode;
+    v.timeInc = v.rateScale * bp.speed;
+    v.hasPrevGrain = false;
     for (auto& gr : v.grains)
         gr.active = false;
 
@@ -811,6 +818,110 @@ void SamplerEngine::triggerGrain (Voice& v)
         g.active = true;
         return;
     }
+}
+
+// ---------- Stretch (WSOLA) and Formant (PSOLA) ----------
+// Both play the sound as overlapping Hann-windowed grains while the play head (v.pos) moves at the
+// speed. Stretch: 60 ms grains at 50 % overlap, each read at the pitch, placed where the waveform best
+// continues the previous grain (so pitch changes without changing length). Formant: grains two pitch
+// periods long, read at the original rate (times the Formant shift) and started once per *output*
+// period, so the pitch changes while the spectral envelope (formants) stays put.
+double SamplerEngine::bestMatch (const SampleData& s, double target, double reference, int window, int length) const noexcept
+{
+    const auto* d = s.audio.getReadPointer (0);
+    const int n = s.audio.getNumSamples();
+    const int ref = (int) reference, base = (int) target;
+    if (ref < 0 || ref + length >= n)
+        return target;
+    double best = target, bestScore = -1.0e30;
+    for (int off = -window; off <= window; off += 2)
+    {
+        const int c = base + off;
+        if (c < 0 || c + length >= n)
+            continue;
+        double dot = 0, energy = 1.0e-9;
+        for (int k = 0; k < length; k += 2)
+        {
+            dot += (double) d[c + k] * d[ref + k];
+            energy += (double) d[c + k] * d[c + k];
+        }
+        const auto score = dot / std::sqrt (energy);
+        if (score > bestScore) { bestScore = score; best = c; }
+    }
+    return best;
+}
+
+void SamplerEngine::startStretchGrain (Voice& v, const SampleData& s)
+{
+    Grain* g = nullptr;
+    for (auto& candidate : v.grains)
+        if (! candidate.active) { g = &candidate; break; }
+    if (g == nullptr)
+        return;
+
+    const auto fileRate = s.sampleRate;
+    if (v.stretch == 1)
+    {
+        const int length = juce::jmax (64, (int) (0.06 * sampleRate));
+        const int hop = length / 2;
+        auto start = v.pos;
+        if (v.hasPrevGrain)
+        {
+            // Where the previous grain's content naturally continues, searched for near the play head
+            const auto natural = v.prevGrainStart + hop * v.inc;
+            start = bestMatch (s, v.pos, natural, (int) (0.008 * fileRate), (int) (0.006 * fileRate));
+        }
+        *g = { true, juce::jmax (0.0, start), v.inc, 0, length, 1.0f };
+        v.prevGrainStart = g->pos;
+        v.hasPrevGrain = true;
+        v.untilNextGrain = hop;
+        return;
+    }
+
+    // Formant (PSOLA)
+    auto period = s.periodSamples > 0 ? (double) s.periodSamples
+                                       : fileRate / juce::MidiMessage::getMidiNoteInHertz (v.layer->root);
+    period = juce::jlimit (fileRate / 2000.0, fileRate / 30.0, period);
+    const auto readInc = v.rateScale * bp.formantRatio;              // formants move with this, not with pitch
+    const int length = juce::jmax (16, (int) (2.0 * period / readInc));
+    const auto spacing = juce::jmax (1.0, period / v.inc);            // one output period at the played pitch
+
+    auto start = v.pos - period;
+    if (v.hasPrevGrain)
+    {
+        // Stay a whole number of periods from the previous grain (keeps the waveform in phase), then refine
+        const auto k = std::round ((start - v.prevGrainStart) / period);
+        start = v.prevGrainStart + k * period;
+        if (std::abs (k) > 0.5)
+            start = bestMatch (s, start, v.prevGrainStart, juce::jmin (64, (int) (period / 4)), juce::jmin (128, (int) period));
+    }
+    const auto gain = juce::jlimit (0.15f, 2.0f, (float) (2.0 * spacing / length));
+    *g = { true, juce::jmax (0.0, start), readInc, 0, length, gain };
+    v.prevGrainStart = g->pos;
+    v.hasPrevGrain = true;
+    v.untilNextGrain = juce::jmax (1, (int) std::round (spacing));
+}
+
+void SamplerEngine::stretchFrame (Voice& v, const SampleData& s, bool stereo, float& l, float& r)
+{
+    if (--v.untilNextGrain <= 0)
+        startStretchGrain (v, s);
+    l = r = 0;
+    const auto last = (double) s.audio.getNumSamples() - 1;
+    for (auto& g : v.grains)
+    {
+        if (! g.active)
+            continue;
+        const auto w = hann ((float) g.age / (float) g.length) * g.gain;
+        l += read (s, 0, g.pos) * w;
+        if (stereo)
+            r += read (s, 1, g.pos) * w;
+        g.pos += g.inc;
+        if (++g.age >= g.length || g.pos >= last)
+            g.active = false;
+    }
+    if (! stereo)
+        r = l;
 }
 
 void SamplerEngine::startModulation (Voice& v)
@@ -925,10 +1036,21 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
             }
             updateModulation (v, pitchChunk);
             v.inc = v.rateScale * std::exp2 ((v.semis + bp.tuneSemis + v.pitchMod) / 12.0f);
+            v.timeInc = v.rateScale * bp.speed;
         }
 
         float l = 0, r = 0;
         bool finished = false;
+        // Resample: the read position moves at the pitch increment. Stretch / Formant: it moves at
+        // the speed (time), and grains supply the pitch.
+        const bool stretched = v.stretch != 0 && v.mode != PlayMode::granular;
+        const auto step = stretched ? v.timeInc : v.inc;
+        auto frame = [&] (double at)
+        {
+            if (stretched) { stretchFrame (v, smp, stereoSample, l, r); return; }
+            l = read (smp, 0, at);
+            r = stereoSample ? read (smp, 1, at) : l;
+        };
 
         switch (v.mode)
         {
@@ -937,9 +1059,10 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
             {
                 if (v.pos >= v.regionEnd) { finished = true; break; }
                 const auto fade = (float) juce::jmin (1.0, (v.regionEnd - v.pos) / endFade);
-                l = read (smp, 0, v.pos) * fade;
-                r = stereoSample ? read (smp, 1, v.pos) * fade : l;
-                v.pos += v.inc;
+                frame (v.pos);
+                l *= fade;
+                r *= fade;
+                v.pos += step;
                 break;
             }
 
@@ -949,20 +1072,19 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
                 {
                     // No usable loop: behave like a one-shot that stops at the end
                     if (v.pos >= v.regionEnd) { finished = true; break; }
-                    l = read (smp, 0, v.pos);
-                    r = stereoSample ? read (smp, 1, v.pos) : l;
-                    v.pos += v.inc;
+                    frame (v.pos);
+                    v.pos += step;
                     break;
                 }
                 const auto loopLen = v.loopEnd - v.loopStart;
                 if (v.pos >= v.loopEnd)
                     v.pos = v.loopStart + std::fmod (v.pos - v.loopStart, loopLen);
 
-                l = read (smp, 0, v.pos);
-                r = stereoSample ? read (smp, 1, v.pos) : l;
+                frame (v.pos);
 
                 // Equal-power crossfade into the audio just before the loop start
-                if (v.xfadeLen > 1.0 && v.pos > v.loopEnd - v.xfadeLen)
+                // (stretched playback doesn't need it: overlapping grains already blend across the seam)
+                if (! stretched && v.xfadeLen > 1.0 && v.pos > v.loopEnd - v.xfadeLen)
                 {
                     const auto t = (float) ((v.pos - (v.loopEnd - v.xfadeLen)) / v.xfadeLen);
                     const auto a = std::cos (t * juce::MathConstants<float>::halfPi);
@@ -971,16 +1093,15 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
                     l = l * a + read (smp, 0, other) * b;
                     r = stereoSample ? r * a + read (smp, 1, other) * b : l;
                 }
-                v.pos += v.inc;
+                v.pos += step;
                 break;
             }
 
             case PlayMode::pingPong:
             {
                 if (! v.loopValid && v.pos >= v.regionEnd) { finished = true; break; }
-                l = read (smp, 0, v.pos);
-                r = stereoSample ? read (smp, 1, v.pos) : l;
-                v.pos += v.inc * v.direction;
+                frame (v.pos);
+                v.pos += step * v.direction;
                 if (v.loopValid)
                 {
                     if (v.direction > 0 && v.pos >= v.loopEnd)

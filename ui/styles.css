@@ -148,7 +148,16 @@ button { cursor: pointer; }
 .statbox { background: var(--well); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 52px; }
 .statbox span:first-child { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .statbox span:last-child { font-family: var(--mono); font-size: 13px; }
-.editor-foot .btn { height: 44px; }
+.editor-foot { gap: 12px; }
+.editor-foot .knobs.tight { gap: 2px; }
+.editor-foot .knobs.tight .knob { width: 54px; }
+.editor-tools { display: flex; flex-direction: column; gap: 6px; width: 252px; flex-shrink: 0; }
+.editor-tools .seg button { height: 26px; font-size: 11px; }
+.tool-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tool-row .btn { height: 30px; padding: 0 4px; font-size: 10px; letter-spacing: .06em; }
+.root-tag { color: var(--text-2); }
+.root-tag span { color: var(--mod); }
+.knob.dim { opacity: .4; }
 
 .minilayers { width: 300px; flex-shrink: 0; gap: 8px; }
 .minilayers .ph { height: 28px; }

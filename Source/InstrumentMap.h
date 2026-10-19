@@ -19,6 +19,7 @@ struct SampleData
     double sampleRate = 44100.0;
     juce::String path;
     float peak = 1.0f;      // largest absolute sample value, for non-destructive normalize
+    float periodSamples = 0; // detected pitch period (in the file's samples) for Formant mode; 0 = unknown
     bool missing = false;   // the file wasn't found: this is the stand-in tone (see SampleCache)
 };
 using SamplePtr = std::shared_ptr<const SampleData>;

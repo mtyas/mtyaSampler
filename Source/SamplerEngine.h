@@ -82,6 +82,7 @@ private:
         bool active = false;
         double pos = 0, inc = 1;
         int age = 0, length = 1;
+        float gain = 1;
     };
 
     struct Voice
@@ -109,7 +110,14 @@ private:
 
         float semis = 0, targetSemis = 0, glideStep = 0;   // pitch relative to the layer's root
         double rateScale = 1;            // sample rate ratio (file / host)
-        double inc = 1;                  // playback increment, refreshed every few samples
+        double inc = 1;                  // playback increment (pitch), refreshed every few samples
+
+        // Stretch / Formant modes: `pos` is a play head moving at timeInc (speed), while grains read
+        // the sound at `inc` (pitch); 0 = Resample (pitch and speed together)
+        int stretch = 0;
+        double timeInc = 1;
+        double prevGrainStart = 0;
+        bool hasPrevGrain = false;
 
         float gainL = 1, gainR = 1;
         float level = 0;                 // last envelope × gain, for "quietest"
@@ -145,6 +153,9 @@ private:
         bool grnFreeze = false;
         juce::ADSR::Parameters env, env2, env3;
 
+        int stretchMode = 0;             // 0 Resample, 1 Stretch (WSOLA), 2 Formant (PSOLA)
+        float speed = 1, formantRatio = 1;
+
         int fltType = 1;
         float cutoff = 20000, reso = 0, driveDb = 0, envAmt = 0;
         struct Lfo { int shape = 0; float rate = 1, depth = 0, phase = 0, fadeMs = 0; } lfo[4];
@@ -153,7 +164,7 @@ private:
     // Indices of the parameters the engine reads (-1 when missing)
     struct Ix
     {
-        int playMode, loopXfade, tune, fine;
+        int playMode, loopXfade, tune, fine, stretchMode, timeSpeed, formant;
         int grnPos, grnSize, grnDensity, grnSpray, grnPitchRnd, grnFreeze;
         int env1[4], env2[4], env3[4];
         int fltType, fltCutoff, fltReso, fltDrive, fltEnvAmt;
@@ -187,6 +198,9 @@ private:
     void updateRegion (Voice&) const;
     float read (const SampleData&, int channel, double pos) const noexcept;
     void triggerGrain (Voice&);
+    void stretchFrame (Voice&, const SampleData&, bool stereo, float& l, float& r);
+    void startStretchGrain (Voice&, const SampleData&);
+    double bestMatch (const SampleData&, double target, double reference, int window, int length) const noexcept;
     void updateModulation (Voice&, int rampSamples);
     void startModulation (Voice&);
 

@@ -45,6 +45,7 @@
       <div class="ph" style="height:28px">
         <div class="ph-left" style="align-items:baseline;gap:12px">
           <h2 class="file" id="sel-file">—</h2>
+          <span class="meta root-tag">Root <span id="sel-root">C3</span></span>
           <span class="meta" id="sel-file-meta">44.1 kHz · 24-bit · 4.82 s</span>
           <div class="seg mono rr-pick" role="group" aria-label="Round-robin variation to edit" id="rr-pick" hidden></div>
         </div>
@@ -71,12 +72,15 @@
       </div>
       <div class="ruler" aria-hidden="true" id="ruler"></div>
       <div class="editor-foot">
-        <div class="knobs tight" id="editor-knobs" data-knobs="loop_xfade,tune,fine"></div>
-        <div style="display:flex;gap:8px">
-          <div class="statbox"><span>Root</span><span id="sel-root">C3</span></div>
-          <button class="btn" id="auto-points" data-keep-pop title="Find start and end from the sound level">Auto S/E</button>
-          <button class="btn" data-action="snapZero" title="Move this sample's points to zero crossings">Snap 0×</button>
-          <button class="btn" data-action="normalize">Normalize</button>
+        <div class="knobs tight" id="editor-knobs" data-knobs="loop_xfade,tune,fine,time_speed,formant"></div>
+        <div class="editor-tools">
+          <div class="seg fill" role="group" aria-label="Pitch and time engine" data-choice="stretch_mode" id="stretch-seg"
+               title="Resample: pitch and speed together · Stretch: pitch and speed independent · Formant: pitch without changing the voice's character"></div>
+          <div class="tool-row">
+            <button class="btn" id="auto-points" data-keep-pop title="Find start and end from the sound level">Auto S/E</button>
+            <button class="btn" data-action="snapZero" title="Move this sample's points to zero crossings">Snap 0×</button>
+            <button class="btn" data-action="normalize" title="Turn this layer up to 0 dB (files unchanged)">Normalize</button>
+          </div>
         </div>
       </div>
     </section>

@@ -140,6 +140,8 @@ How the engine reads the layer fields:
 
 Playback modes (`play_mode`, global): **One-shot** plays the sample's start→end once, stopping early on key-up via the amp envelope. **Loop** plays into the loop and repeats Loop Start→Loop End with an equal-power crossfade (`loop_xfade`, limited by the audio before the loop start). **Ping-pong** bounces between the loop points. **Slice** splits Start→End into 16; the key's distance from the root picks the slice (root = slice 1), played at its own pitch. **Granular** sprays grains (`grn_size`, `grn_density`, `grn_spray`, `grn_pitchrnd`) around a position that starts at `grn_pos` and moves at normal speed, or stays at `grn_pos` while Freeze is on. Release samples always play as one-shots. Pitch bend is ±2 st; the sustain pedal (CC 64) holds notes.
 
+Pitch and time (`stretch_mode`, not in Granular): **Resample** reads at the pitch increment. **Stretch** (WSOLA): the play head moves at Speed; 60 ms Hann grains at 50 % overlap read at the pitch, each placed (±8 ms search, normalised cross-correlation over 6 ms) where the waveform best continues the previous grain. **Formant** (PSOLA): grains two source periods long (period detected per file with YIN on load, `SampleData::periodSamples`, falling back to the layer's root), read at the file rate × `formant` shift, started once per output period at the played pitch, kept a whole number of periods apart and refined by correlation; level normalised by grain spacing. Loops and ping-pong move the play head; the grains blend across the loop seam (no X-Fade needed).
+
 Sound design (per voice: sample → filter with drive → modulated pan → Env 1 amp; then the FX chain and Master on the whole mix):
 
 - **Filter** (`flt_type`), all running at 2× the sample rate with half-band FIR up/down-sampling, the knobs smoothed over ~10 ms:
@@ -202,6 +204,9 @@ Global sources are applied once per block; per-voice ones per voice. An instrume
 | `loop_xfade` | Loop Crossfade | float | 0 – 500 ms (skew 0.4) | 22 | Sample |
 | `tune` | Tune | float | -24 – 24 st (step 1, bipolar) | 0 | Sample |
 | `fine` | Fine Tune | float | -100 – 100 ct (step 1, bipolar) | 12 | Sample |
+| `stretch_mode` | Stretch Mode | choice | Resample / Stretch / Formant | Resample | Sample |
+| `time_speed` | Playback Speed | float | 10 – 400 % (skew 0.5) | 100 | Sample |
+| `formant` | Formant Shift | float | -12 – 12 st (bipolar) | 0 | Sample |
 | `grn_pos` | Grain Position | float | 0 – 100 % | 52.5 | Granular |
 | `grn_size` | Grain Size | float | 5 – 500 ms (skew 0.5) | 84 | Granular |
 | `grn_density` | Grain Density | float | 1 – 100 /s (skew 0.5) | 32 | Granular |

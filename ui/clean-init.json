@@ -36,7 +36,10 @@
     "fx_chorus_on": false,
     "fx_delay_on": false,
     "fx_reverb_on": false,
-    "fx_tape_on": false
+    "fx_tape_on": false,
+    "stretch_mode": 0,
+    "time_speed": 100,
+    "formant": 0
   },
   "instrument": {
     "version": 1,

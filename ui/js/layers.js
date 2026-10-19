@@ -456,5 +456,17 @@ export function setupLayers(bridge, ui) {
   bridge.onInstrument((next) => { inst = next; if (sel >= inst.layers.length) sel = Math.max(0, inst.layers.length - 1); renderAll(); });
   renderAll();
 
-  return { actions, current: cur, renderMini, showGroup(g) { group = g; const i = layers().findIndex((l) => l.group === g); if (i >= 0) sel = i; renderAll(); } };
+  // Show the layer a key plays (keyboard clicks): keep the current one if it covers the key, otherwise
+  // prefer a layer in the same group, then any unmuted one.
+  function selectForNote(note, vel = 100) {
+    const plays = (l) => note >= l.lo && note <= l.hi && vel >= l.vlo && vel <= l.vhi && !l.muted;
+    const c = cur();
+    if (c && plays(c)) return;
+    const all = layers();
+    let i = all.findIndex((l) => plays(l) && c && l.group === c.group);
+    if (i < 0) i = all.findIndex(plays);
+    if (i >= 0) select(i);
+  }
+
+  return { actions, current: cur, renderMini, selectForNote, showGroup(g) { group = g; const i = layers().findIndex((l) => l.group === g); if (i >= 0) sel = i; renderAll(); } };
 }

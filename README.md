@@ -8,7 +8,8 @@ A free, open-source sampler instrument (VST3, CLAP and Standalone) for sound des
 
 ## Features
 
-- **Five playback modes:** one-shot, loop (with crossfade), ping-pong, slice (16 slices across the keys) and granular (size, density, spray, pitch randomness, freeze).
+- **Five playback modes:** one-shot, loop (with crossfade), ping-pong, slice (16 slices across the keys) and granular (position, size, density, spray, pitch randomness, freeze).
+- **Three pitch/time engines:** Resample (classic), Stretch (pitch and time independent, with a Speed control) and Formant (pitch shifting that keeps a voice's character, with a Formant shift).
 - **Analogue-style filters:** a transistor-ladder LP24, LP12, BP, HP and a comb, all oversampled, all able to self-oscillate at full resonance.
 - **Modulation:** three envelopes, four LFOs, four macros, mod wheel, aftertouch, velocity and key tracking, routed to any of 12 per-note targets or to any knob.
 - **FX chain:** saturate, bitcrush, chorus, delay (tempo sync, ping-pong), reverb and tape (wow, flutter, drive). Drag them into any order, with full settings for each.

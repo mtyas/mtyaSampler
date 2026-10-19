@@ -45,6 +45,19 @@ async function boot() {
   // ---------- FX chain ----------
   setupFxChain(bridge);
 
+  // Speed only matters in Stretch and Formant modes, Formant only in Formant mode
+  {
+    const knobFor = (id) => [...document.querySelectorAll('#editor-knobs .knob')].find((k) => k.querySelector('.knob-dial')?.getAttribute('aria-label') === bridge.param(id).spec.name);
+    const mode = bridge.param('stretch_mode');
+    const dim = () => {
+      const m = mode.getValue();
+      knobFor('time_speed')?.classList.toggle('dim', m === 0);
+      knobFor('formant')?.classList.toggle('dim', m !== 2);
+    };
+    mode.onChange(dim);
+    dim();
+  }
+
   // ---------- displays + tabs ----------
   const displays = setupDisplays(bridge);
   const mod = setupModMatrix(bridge);
@@ -70,6 +83,7 @@ async function boot() {
   const kbdRange = () => [(baseOct + 2) * 12, (baseOct + 2) * 12 + 48];
   const held = new Set();
   const press = (n, el) => {
+    if (layers) layers.selectForNote(n, 100);   // the editor shows the sample this key plays
     held.add(n); el.classList.add('down');
     $('last-note').textContent = noteName(n) + ' · v100';
     bridge.noteOn(n, 100);
@@ -84,7 +98,7 @@ async function boot() {
       b.className = cls; b.setAttribute('aria-label', noteName(n));
       if (style) b.setAttribute('style', style);
       if (label) b.textContent = label;
-      b.addEventListener('pointerdown', (e) => { b.setPointerCapture(e.pointerId); press(n, b); });
+      b.addEventListener('pointerdown', (e) => { try { b.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ } press(n, b); });
       b.addEventListener('pointerup', () => release(n, b));
       b.addEventListener('pointercancel', () => release(n, b));
       b.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !held.has(n)) { e.preventDefault(); press(n, b); } });

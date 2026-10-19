@@ -44,7 +44,17 @@ The waveform shows the selected layer's sample, with these markers:
 
 **Every sample has its own points**, including each round-robin variation. When a layer has variations, **RR1, RR2…** next to the file name choose which one you're editing. You can also click a variation on the Layers page.
 
-Edit the points by **dragging the S, E and L lines on the waveform**, or with the **Start**, **End**, **Loop In** and **Loop Out** knobs. The points stay in order: the loop always sits between start and end. **X-Fade** (the loop crossfade), **Tune** (semitones) and **Fine** (cents) apply to the whole instrument.
+Edit the points by **dragging the S, E and L lines on the waveform**, or with the **Start**, **End**, **Loop In** and **Loop Out** knobs. The points stay in order: the loop always sits between start and end. **X-Fade** (the loop crossfade), **Tune** (semitones) and **Fine** (cents) apply to the whole instrument. The selected layer's **root** note is shown next to the file name.
+
+**Pitch, time and formant.** The switch above the tool buttons chooses how samples are played back at other pitches:
+
+| Engine | What happens |
+|---|---|
+| **Resample** | Like tape or a classic sampler: higher notes play faster and shorter, lower notes slower and longer. The most natural sound for most instruments. |
+| **Stretch** | Pitch and time are independent. Notes keep the sample's length at any pitch, and the **Speed** knob (10–400 %) makes it longer or shorter without changing the pitch. Overlapping grains aligned to the waveform (WSOLA). Good for loops, textures and drums. |
+| **Formant** | Like Stretch, but the sound's character (its formants) stays put when the pitch moves, so voices don't go "chipmunk" up high or boomy down low. The **Formant** knob shifts the character up or down on purpose (±12 semitones). Uses each sample's detected pitch (PSOLA), so it works best on pitched sounds (voice, strings, synths); use Stretch for noisy or unpitched ones. |
+
+Speed and Formant are greyed out when they don't apply. Both can be automated and modulated. The engine works in One-shot, Loop, Ping-pong and Slice; Granular already keeps pitch and time separate.
 
 **Auto S/E** finds the points from the sound level:
 
@@ -201,6 +211,7 @@ Here's what each one controls at first:
 ### Keyboard
 
 - Click the keys, or use your computer keyboard: **A W S E D F T G Y H U J K** play one octave.
+- Playing a key selects the layer it plays (at velocity 100), so the sample editor shows that sample. If the selected layer already covers the key, it stays selected.
 - **Oct − / Oct +** shift the range.
 - On the left are the pitch wheel (±2 semitones) and the mod wheel.
 - The bar above the keys shows the selected layer's key range (amber) and root key (cyan).

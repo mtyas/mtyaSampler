@@ -8,6 +8,7 @@
 #include "../Source/SamplerEngine.h"
 #include "../Source/FxChain.h"
 #include "../Source/SampleTools.h"
+#include <juce_dsp/juce_dsp.h>
 #include <iostream>
 
 namespace
@@ -79,7 +80,7 @@ namespace
         void neutral()
         {
             const std::pair<const char*, float> v[] = {
-                { "play_mode", 0 }, { "loop_xfade", 10 },
+                { "play_mode", 0 }, { "loop_xfade", 10 }, { "stretch_mode", 0 }, { "time_speed", 100 }, { "formant", 0 },
                 { "tune", 0 }, { "fine", 0 }, { "grn_pos", 50 }, { "grn_size", 80 }, { "grn_density", 30 }, { "grn_spray", 10 },
                 { "grn_pitchrnd", 0 }, { "grn_freeze", 0 },
                 { "env1_attack", 0.001f }, { "env1_decay", 0.1f }, { "env1_sustain", 100 }, { "env1_release", 0.01f },
@@ -668,6 +669,79 @@ int main()
         for (int i = (int) (0.1 * hostRate); i < (int) (0.3 * hostRate); ++i)
             levels.add (juce::roundToInt (crush.out.getSample (0, i) * 1000));
         check (levels.size() <= 4, "a 2-bit crush leaves only a few output levels (" + juce::String (levels.size()) + ")");
+    }
+
+    std::cout << "Pitch / time / formant engines" << std::endl;
+    {
+        const auto inst = instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") });
+        // How long a note keeps sounding (one-shot), and its pitch early on
+        auto measure = [&] (int mode, int note, float speed, double& seconds, double& hz)
+        {
+            Rig rig (inst);
+            rig.fp.set ("stretch_mode", (float) mode);
+            rig.fp.set ("time_speed", speed);
+            rig.on (note); rig.run (2.6);
+            hz = rig.hz (0.1, 0.3);
+            seconds = 0;
+            for (double t = 0; t < 2.6; t += 0.02)
+                if (rig.rms (t, t + 0.02) > 0.02f) seconds = t + 0.02;
+        };
+        double secs, hz;
+        measure (0, 72, 100, secs, hz);
+        check (near (hz, 400, 6) && near (secs, 0.5, 0.06), "Resample: an octave up plays at 400 Hz and lasts half as long (" + juce::String (secs, 2) + " s)");
+        measure (1, 72, 100, secs, hz);
+        check (near (hz, 400, 6) && near (secs, 1.0, 0.08), "Stretch: an octave up plays at 400 Hz but keeps its length (" + juce::String (hz, 0) + " Hz, " + juce::String (secs, 2) + " s)");
+        measure (1, 60, 50, secs, hz);
+        check (near (hz, 200, 4) && near (secs, 2.0, 0.12), "Stretch: Speed 50 % doubles the length at the same pitch (" + juce::String (hz, 0) + " Hz, " + juce::String (secs, 2) + " s)");
+        measure (2, 67, 100, secs, hz);
+        check (near (hz, 200 * std::exp2 (7 / 12.0), 6) && near (secs, 1.0, 0.08), "Formant: a fifth up plays at the new pitch and keeps its length (" + juce::String (hz, 0) + " Hz, " + juce::String (secs, 2) + " s)");
+
+        // Grains mustn't make the level flutter: 20 ms windows stay within a few percent of each other
+        for (int mode : { 1, 2 })
+        {
+            Rig rig (inst);
+            rig.fp.set ("stretch_mode", (float) mode);
+            rig.on (65); rig.run (0.8);
+            float lo = 10, hi = 0;
+            for (double t = 0.1; t < 0.7; t += 0.02)
+            {
+                const auto level = rig.rms (t, t + 0.02);
+                lo = juce::jmin (lo, level); hi = juce::jmax (hi, level);
+            }
+            check (hi / lo < 1.12f, juce::String (mode == 1 ? "Stretch" : "Formant") + ": the level stays steady (" + juce::String ((hi / lo - 1) * 100, 1) + " % spread)");
+        }
+
+        // A "vowel": a 150 Hz buzz through a resonance at 1 kHz. Shifting it up a fifth should move the
+        // resonance with Resample, but keep it near 1 kHz with Formant.
+        const auto vowel = writeWav (dir, "vowel.wav", hostRate, (int) hostRate, [] (int i)
+        {
+            static double y1 = 0, y2 = 0;
+            if (i == 0) y1 = y2 = 0;
+            const double rr = 0.995, theta = juce::MathConstants<double>::twoPi * 1000.0 / hostRate;
+            const double x = (i % 320 == 0) ? 1.0 : 0.0;   // 150 Hz pulses
+            const double y = x + 2 * rr * std::cos (theta) * y1 - rr * rr * y2;
+            y2 = y1; y1 = y;
+            return (float) (y * 0.02);
+        });
+        auto strongestHz = [&] (int mode)
+        {
+            Rig rig (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (vowel) + "]") }));
+            rig.fp.set ("stretch_mode", (float) mode);
+            rig.on (67); rig.run (0.6);
+            juce::dsp::FFT fft (14);
+            std::vector<float> data (2 << 14, 0.0f);
+            const int startAt = (int) (0.15 * hostRate);
+            for (int i = 0; i < (1 << 14) && startAt + i < rig.out.getNumSamples(); ++i)
+                data[(size_t) i] = rig.out.getSample (0, startAt + i) * (0.5f - 0.5f * std::cos (juce::MathConstants<float>::twoPi * (float) i / (1 << 14)));
+            fft.performFrequencyOnlyForwardTransform (data.data());
+            int best = 1;
+            for (int b = 1; b < (1 << 13); ++b)
+                if (data[(size_t) b] > data[(size_t) best]) best = b;
+            return best * hostRate / (1 << 14);
+        };
+        const auto resampled = strongestHz (0), formant = strongestHz (2);
+        check (resampled > 1300 && formant > 800 && formant < 1250,
+               "Formant keeps the vowel's resonance near 1 kHz when the pitch goes up a fifth (Resample: " + juce::String (resampled, 0) + " Hz, Formant: " + juce::String (formant, 0) + " Hz)");
     }
 
     std::cout << "Playheads" << std::endl;

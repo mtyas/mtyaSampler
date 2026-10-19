@@ -1,4 +1,5 @@
 #include "InstrumentMap.h"
+#include "SampleTools.h"
 
 namespace
 {
@@ -130,6 +131,9 @@ SamplePtr SampleCache::load (const juce::File& file)
     reader->read (&s->audio, 0, length, 0, true, channels > 1);
     s->sampleRate = reader->sampleRate;
     s->peak = juce::jmax (1.0e-6f, s->audio.getMagnitude (0, length));
+    // The pitch period, for Formant mode's pitch-synchronous grains (0 when there's no clear pitch)
+    if (const auto hz = SampleTools::detectPitchHz (s->audio, s->sampleRate); hz > 0)
+        s->periodSamples = (float) (s->sampleRate / hz);
     s->path = file.getFullPathName();
     return s;
 }
@@ -148,6 +152,7 @@ SamplePtr SampleCache::missingTone (int rootNote)
     s->sampleRate = sr;
     s->missing = true;
     s->peak = 0.25f;
+    s->periodSamples = (float) (sr / juce::MidiMessage::getMidiNoteInHertz (rootNote));
     const auto delta = juce::MathConstants<double>::twoPi * juce::MidiMessage::getMidiNoteInHertz (rootNote) / sr;
     auto* d = s->audio.getWritePointer (0);
     for (int i = 0; i < length; ++i)
