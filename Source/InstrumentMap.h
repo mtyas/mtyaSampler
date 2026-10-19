@@ -31,7 +31,7 @@ struct Layer
     enum class Steal { oldest, quietest, lowest, highest };
     enum class VoiceMode { poly, mono, legato };
 
-    int id = 0;
+    juce::int64 id = 0;   // the UI's ids come from Date.now() (about 1.8e12), so they need 64 bits
     int lo = 0, hi = 127, root = 60, vlo = 0, vhi = 127;
     float keyFade = 0, velFade = 0;         // width of the crossfade around each edge (keys / velocity steps)
     float keyTrack = 1.0f;                  // 1 = 100 %

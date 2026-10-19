@@ -56,7 +56,7 @@ void SampleLoader::run()
             auto map = buildInstrumentMap (parsed.isObject() ? parsed : juce::var(), cache, engine.paramIds());
             loadedSamples = map->loadedSamples;
             missingSamples = map->missingSamples;
-            std::vector<std::pair<int, int>> groups;
+            std::vector<std::pair<juce::int64, int>> groups;
             for (const auto& l : map->layers)
                 groups.emplace_back (l.id, l.rrGroup);
             engine.publish (std::move (map));

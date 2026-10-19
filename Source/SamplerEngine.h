@@ -69,7 +69,7 @@ public:
 
     // Message thread: where the playing notes are in their samples (newest first), for the
     // waveform's playhead. Returns how many were written.
-    struct Playhead { int layerId = 0, variation = 0; float position = 0; };
+    struct Playhead { juce::int64 layerId = 0; int variation = 0; float position = 0; };
     static constexpr int maxPlayheads = 8;
     int getPlayheads (Playhead* out, int max) const noexcept;
 
@@ -233,7 +233,8 @@ private:
     std::array<std::atomic<int>, maxRRGroups> rrShown {};
 
     // Playheads published at the end of each block (audio thread writes, message thread reads)
-    std::array<std::atomic<int>, maxPlayheads> phLayer {}, phVariation {};
+    std::array<std::atomic<juce::int64>, maxPlayheads> phLayer {};
+    std::array<std::atomic<int>, maxPlayheads> phVariation {};
     std::array<std::atomic<float>, maxPlayheads> phPosition {};
     std::atomic<int> phCount { 0 };
     double samplesSinceNoteOn = 0;

@@ -672,13 +672,14 @@ int main()
 
     std::cout << "Playheads" << std::endl;
     {
-        Rig rig (instrument ({ layer (juce::String ("\"id\":42,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") }));
+        // Layers made in the UI get ids from Date.now(), far beyond 32 bits: they must come back unchanged
+        Rig rig (instrument ({ layer (juce::String ("\"id\":1792419905776,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") }));
         rig.on (60); rig.run (0.25);
         SamplerEngine::Playhead heads[SamplerEngine::maxPlayheads];
         const int n = rig.engine->getPlayheads (heads, SamplerEngine::maxPlayheads);
         // 0.25 s into a 1 s file at the same pitch
-        check (n == 1 && heads[0].layerId == 42 && heads[0].variation == 0 && near (heads[0].position, 0.25, 0.02),
-               "the playing note's position is reported for the waveform (" + juce::String (n > 0 ? heads[0].position : -1.0f, 3) + ")");
+        check (n == 1 && heads[0].layerId == 1792419905776LL && heads[0].variation == 0 && near (heads[0].position, 0.25, 0.02),
+               "the playing note's position and its layer's full id are reported (" + juce::String (n > 0 ? heads[0].position : -1.0f, 3) + ")");
         rig.off (60); rig.run (0.1);
         check (rig.engine->getPlayheads (heads, SamplerEngine::maxPlayheads) == 0, "and disappears when the note ends");
     }

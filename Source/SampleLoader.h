@@ -33,5 +33,5 @@ private:
     mutable juce::CriticalSection lock;
     juce::String pendingJson;
     bool hasPending = false;
-    std::vector<std::pair<int, int>> layerGroups;   // (layer id, RR group) of the newest map, under `lock`
+    std::vector<std::pair<juce::int64, int>> layerGroups;   // (layer id, RR group) of the newest map, under `lock`
 };

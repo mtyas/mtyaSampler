@@ -314,7 +314,7 @@ std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, Sample
             continue;
 
         Layer layer;
-        layer.id = intOr (l["id"], 100000 + index);
+        layer.id = l["id"].isVoid() ? (juce::int64) (100000 + index) : (juce::int64) l["id"];
 
         layer.lo   = juce::jlimit (0, 127, intOr (l["lo"], 0));
         layer.hi   = juce::jlimit (layer.lo, 127, intOr (l["hi"], 127));
