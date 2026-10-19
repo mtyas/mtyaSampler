@@ -21,6 +21,15 @@ void SampleLoader::load (const juce::String& instrumentJson)
     notify();
 }
 
+juce::var SampleLoader::rrPositions() const
+{
+    auto* o = new juce::DynamicObject();
+    const juce::ScopedLock sl (lock);
+    for (const auto& [id, group] : layerGroups)
+        o->setProperty (juce::String (id), engine.rrPosition (group));
+    return juce::var (o);
+}
+
 void SampleLoader::run()
 {
     while (! threadShouldExit())
@@ -44,12 +53,16 @@ void SampleLoader::run()
         if (build)
         {
             auto parsed = juce::JSON::parse (json);
-            auto map = buildInstrumentMap (parsed.isObject() ? parsed : juce::var(), cache);
+            auto map = buildInstrumentMap (parsed.isObject() ? parsed : juce::var(), cache, engine.paramIds());
             loadedSamples = map->loadedSamples;
             missingSamples = map->missingSamples;
+            std::vector<std::pair<int, int>> groups;
+            for (const auto& l : map->layers)
+                groups.emplace_back (l.id, l.rrGroup);
             engine.publish (std::move (map));
 
             const juce::ScopedLock sl (lock);
+            layerGroups = std::move (groups);
             busy = hasPending;
         }
 

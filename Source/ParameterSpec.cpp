@@ -38,14 +38,9 @@ namespace ParameterSpec
                 }
                 else // float
                 {
-                    const auto min  = (float) (double) p["min"];
-                    const auto max  = (float) (double) p["max"];
-                    const auto step = p.hasProperty ("step") ? (float) (double) p["step"] : 0.0f;
-                    const auto skew = p.hasProperty ("skew") ? (float) (double) p["skew"] : 1.0f;
-
                     layout.add (std::make_unique<juce::AudioParameterFloat> (
                         pid, name,
-                        juce::NormalisableRange<float> (min, max, step, skew),
+                        rangeFor (p),
                         (float) (double) p["default"],
                         juce::AudioParameterFloatAttributes().withLabel (p["unit"].toString())));
                 }

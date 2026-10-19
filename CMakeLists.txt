@@ -58,7 +58,10 @@ target_sources(mtyaSampler PRIVATE
     Source/SampleRecorder.cpp
     Source/InstrumentMap.cpp
     Source/SamplerEngine.cpp
-    Source/SampleLoader.cpp)
+    Source/SampleLoader.cpp
+    Source/FxChain.cpp
+    Source/PresetManager.cpp
+    Source/SampleTools.cpp)
 
 # ---------------------------------------------------------------------------
 # Web UI → BinaryData
@@ -126,7 +129,9 @@ if(MTYA_BUILD_TESTS)
     target_sources(mtyaEngineTests PRIVATE
         tests/EngineTests.cpp
         Source/InstrumentMap.cpp
-        Source/SamplerEngine.cpp)
+        Source/SamplerEngine.cpp
+        Source/FxChain.cpp
+        Source/SampleTools.cpp)
     target_compile_definitions(mtyaEngineTests PRIVATE
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
@@ -135,6 +140,7 @@ if(MTYA_BUILD_TESTS)
         PRIVATE
             juce::juce_audio_formats
             juce::juce_audio_processors
+            juce::juce_dsp
         PUBLIC
             juce::juce_recommended_config_flags
             juce::juce_recommended_warning_flags)

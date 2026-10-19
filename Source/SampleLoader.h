@@ -21,13 +21,17 @@ public:
     std::atomic<int> loadedSamples { 0 }, missingSamples { 0 };
     std::atomic<bool> busy { false };
 
+    // { layerId: next round-robin position } for the inspector (message thread)
+    juce::var rrPositions() const;
+
 private:
     void run() override;
 
     SamplerEngine& engine;
     SampleCache cache;
 
-    juce::CriticalSection lock;
+    mutable juce::CriticalSection lock;
     juce::String pendingJson;
     bool hasPending = false;
+    std::vector<std::pair<int, int>> layerGroups;   // (layer id, RR group) of the newest map, under `lock`
 };

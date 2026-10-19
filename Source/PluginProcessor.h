@@ -5,6 +5,8 @@
 #include "SampleRecorder.h"
 #include "SamplerEngine.h"
 #include "SampleLoader.h"
+#include "FxChain.h"
+#include "PresetManager.h"
 
 // mtyaSampler audio processor.
 //
@@ -13,9 +15,10 @@
 //  * The instrument: layers, mapping, round robin etc. Not automatable. Kept as JSON (schema in
 //    docs/ui-spec.md), edited by the Layers page, saved with the plugin state.
 //
-// The audio engine is SamplerEngine (voices, round robin, trigger and playback modes); its
-// instrument maps are built from the JSON by SampleLoader on a background thread.
-// Filter, LFOs, FX and macros are still to come. See CLAUDE.md, Roadmap.
+// Signal flow: SamplerEngine (voices, filter, envelopes, LFOs, modulation; its instrument maps are
+// built by SampleLoader on a background thread) → FxChain (in the instrument's order) → Master →
+// Create-page guide audio. Layers routed to Bus 2–4 skip the FX and Master when the host has
+// those outputs switched on. See CLAUDE.md.
 class MtyaSamplerProcessor final : public juce::AudioProcessor,
                                    public juce::ChangeBroadcaster
 {
@@ -37,7 +40,7 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    double getTailLengthSeconds() const override { return FxChain::tailSeconds; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -63,9 +66,37 @@ public:
     // Create page: the sample-recording assistant. It records from the plugin's audio input.
     SampleRecorder recorder;
 
-    // The sampler and the thread that loads its samples (declared after apvts: they read its parameters)
+    // The sampler, its effects and the thread that loads its samples (declared after apvts: they read its parameters)
     SamplerEngine engine;
+    FxChain fx;
     SampleLoader loader;
+
+    PresetManager presets { *this };
+
+    // Plays a file through the output once (Create page "listen back"). Message thread → audio thread.
+    class ClipPlayer
+    {
+    public:
+        ~ClipPlayer();
+        void play (juce::AudioBuffer<float>&& audio, double sampleRate);   // message thread
+        void stop() { stopRequest = true; }                              // any thread
+        void process (juce::AudioBuffer<float>& out, double hostRate) noexcept;   // audio thread
+        void collectGarbage();                                           // message thread
+        bool isPlaying() const noexcept { return playing.load(); }
+    private:
+        struct Clip { juce::AudioBuffer<float> audio; double rate = 44100; };
+        std::atomic<Clip*> pending { nullptr }, retired { nullptr };
+        Clip* current = nullptr;
+        double pos = 0;
+        std::atomic<bool> stopRequest { false }, playing { false };
+    };
+    ClipPlayer clipPlayer;
+
+    // Note-ons from the host and the on-screen keyboard, for "Learn key range". Audio → message thread.
+    bool popLearnedNote (int& note);
+
+    // Window size, remembered with the plugin state
+    std::atomic<int> editorWidth { 0 }, editorHeight { 0 };
 
     // Read by the editor's timer for meters/stats.
     std::atomic<float> meterL { 0.0f }, meterR { 0.0f };
@@ -77,6 +108,8 @@ private:
     juce::String instrumentJson;
 
     juce::AudioBuffer<float> inputCopy;   // input saved before the buffer is cleared
+    juce::AbstractFifo learnFifo { 64 };
+    std::array<int, 64> learnNotes {};
     juce::AudioProcessLoadMeasurer loadMeasurer;
     std::atomic<float>* masterVol = nullptr;
 

@@ -7,3 +7,4 @@ out/
 CMakeUserPresets.json
 # copied from JUCE at configure time
 ui/js/juce/
+.claude/launch.json

@@ -18,6 +18,7 @@ struct SampleData
     juce::AudioBuffer<float> audio;
     double sampleRate = 44100.0;
     juce::String path;
+    float peak = 1.0f;      // largest absolute sample value, for non-destructive normalize
     bool missing = false;   // the file wasn't found: this is the stand-in tone (see SampleCache)
 };
 using SamplePtr = std::shared_ptr<const SampleData>;
@@ -54,6 +55,8 @@ struct Layer
     VoiceMode voiceMode = VoiceMode::poly;
     float glideMs = 0;
 
+    float normalizeGain = 1.0f;             // "normalize": true brings the loudest sample to 0 dBFS
+
     int keyswitch = -1;                     // MIDI note, -1 = always active
     int articulation = -1;                  // index of the articulation name, -1 = none
 
@@ -61,6 +64,30 @@ struct Layer
     bool covers (int note, int velocity) const noexcept;
     // Equal-power crossfade gain for a note/velocity (1 inside the range, 0 outside the fades).
     float zoneGain (int note, int velocity) const noexcept;
+};
+
+// Modulation routing (the "modRoutes" list in the instrument JSON).
+namespace Mod
+{
+    // Sources. Global ones (macros, wheel, aftertouch) are the same for every voice and can also
+    // modulate any automatable parameter; per-voice ones only reach the voice targets below.
+    enum Source { env2, env3, lfo1, lfo2, lfo3, lfo4, macro1, macro2, macro3, macro4, modWheel, aftertouch, velocity, key, numSources };
+    inline constexpr const char* sourceIds[] = { "env2", "env3", "lfo1", "lfo2", "lfo3", "lfo4", "macro1", "macro2", "macro3", "macro4",
+                                                 "modwheel", "aftertouch", "velocity", "key" };
+    inline bool isGlobal (int s) noexcept { return s >= macro1 && s <= aftertouch; }
+
+    // Per-voice targets. What 100 % means for each is in docs/ui-spec.md (Modulation).
+    enum Target { pitch, volume, pan, cutoff, reso, drive, grainPos, grainSize, grainDensity, grainSpray, grainPitchRnd, start, numTargets };
+    inline constexpr const char* targetIds[] = { "pitch", "volume", "pan", "cutoff", "reso", "drive", "grain_pos", "grain_size",
+                                                 "grain_density", "grain_spray", "grain_pitchrnd", "start" };
+}
+
+struct ModRoute
+{
+    int source = 0;
+    int target = -1;     // Mod::Target, or -1 when it modulates a parameter
+    int param = -1;      // index into the engine's parameter list ("param:<id>" targets)
+    float amount = 0;    // -1 … 1
 };
 
 struct InstrumentMap
@@ -73,6 +100,9 @@ struct InstrumentMap
     std::array<int, 128> keyswitchArticulation {};   // per note: articulation it selects, -1 = not a keyswitch
     int defaultKeyswitch = -1;              // lowest keyswitch note, active until another is pressed
     int missingSamples = 0, loadedSamples = 0;
+
+    std::vector<ModRoute> routes;
+    std::array<int, 5> fxOrder { 0, 1, 2, 3, 4 };   // 0 saturate, 1 bitcrush, 2 chorus, 3 delay, 4 reverb
 
     // Audio thread only: how many voices still point into this map.
     mutable int voiceRefs = 0;
@@ -112,4 +142,11 @@ private:
 };
 
 // Builds a map from the instrument JSON. Runs on the loader thread (or in tests).
-std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, SampleCache& cache);
+// `paramIds` is the engine's parameter list, used to resolve "param:<id>" modulation targets.
+std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, SampleCache& cache, const juce::StringArray& paramIds = {});
+
+// The routing used when an instrument has no "modRoutes" (as JSON, so the UI can show it too).
+juce::var defaultModRoutes();
+
+// The FX order ids used in the instrument JSON ("fxOrder").
+inline constexpr const char* fxIds[] = { "sat", "crush", "chorus", "delay", "reverb" };

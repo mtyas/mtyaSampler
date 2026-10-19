@@ -1,68 +1,55 @@
 #pragma once
 #include "InstrumentMap.h"
+#include "VoiceFilter.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 
 // The sampler: voices, round robin, trigger modes, voice modes, the playback modes, and per-voice
-// sound design (drive + filter, three envelopes, four LFOs with fixed destinations).
+// sound design (filter with drive, three envelopes, four LFOs) driven by a modulation matrix.
 // Everything in process() runs on the audio thread: no allocation, locks or file I/O.
 //
 // Instrument changes arrive as a ready-built InstrumentMap through publish() (any thread).
 // The audio thread picks it up at the start of the next block. Old maps go back to the loader
 // thread for deletion once no voice is playing from them (popRetired).
+//
+// Modulation: global sources (macros, mod wheel, aftertouch) are applied once per block, to the
+// voice targets and to any parameter ("param:<id>" routes); param() returns those modulated values,
+// which the FX chain also reads. Per-voice sources (Env 2/3, LFOs, velocity, key) are applied per
+// voice every 32 samples.
 class SamplerEngine
 {
 public:
-    // Raw parameter values from the APVTS (see ui/params.json for ranges and units).
-    struct Params
+    struct ParamRef
     {
-        std::atomic<float>* playMode = nullptr;   // 0 one-shot, 1 loop, 2 ping-pong, 3 slice, 4 granular
-        std::atomic<float>* start = nullptr;      // %, of the sample
-        std::atomic<float>* end = nullptr;
-        std::atomic<float>* loopStart = nullptr;
-        std::atomic<float>* loopEnd = nullptr;
-        std::atomic<float>* loopXfade = nullptr;  // ms
-        std::atomic<float>* tune = nullptr;       // semitones
-        std::atomic<float>* fine = nullptr;       // cents
-        std::atomic<float>* grnPos = nullptr;     // %
-        std::atomic<float>* grnSize = nullptr;    // ms
-        std::atomic<float>* grnDensity = nullptr; // grains per second
-        std::atomic<float>* grnSpray = nullptr;   // %
-        std::atomic<float>* grnPitchRnd = nullptr;// semitones
-        std::atomic<float>* grnFreeze = nullptr;  // bool
-        std::atomic<float>* attack = nullptr;     // Env 1 (amp), seconds
-        std::atomic<float>* decay = nullptr;
-        std::atomic<float>* sustain = nullptr;    // %
-        std::atomic<float>* release = nullptr;
-
-        std::atomic<float>* fltType = nullptr;    // 0 LP24, 1 LP12, 2 BP, 3 HP, 4 Comb
-        std::atomic<float>* fltCutoff = nullptr;  // Hz
-        std::atomic<float>* fltReso = nullptr;    // %
-        std::atomic<float>* fltDrive = nullptr;   // dB
-        std::atomic<float>* fltEnvAmt = nullptr;  // %, bipolar: Env 2 → cutoff
-        std::array<std::atomic<float>*, 4> env2 {}, env3 {};   // attack, decay, sustain, release
-        struct Lfo { std::atomic<float>* shape = nullptr, *rate = nullptr, *depth = nullptr, *phase = nullptr, *fade = nullptr; };
-        std::array<Lfo, 4> lfo {};
-
-        static Params fromApvts (juce::AudioProcessorValueTreeState&);
+        juce::String id;
+        std::atomic<float>* value = nullptr;
+        juce::NormalisableRange<float> range;
+        bool modulatable = false;   // floats only
     };
+    using ParamList = std::vector<ParamRef>;
+
+    // Builds the list from params.json. `valueFor` gives the storage for an id: the APVTS raw value
+    // in the plugin, or a test's own atomics.
+    static ParamList makeParamList (const juce::var& spec, const std::function<std::atomic<float>* (const juce::String&)>& valueFor);
 
     enum class PlayMode { oneShot, loop, pingPong, slice, granular };
 
     static constexpr int maxVoices = 96;
     static constexpr int maxGrains = 32;
+    static constexpr int numAuxOutputs = 3;   // "Bus 2" … "Bus 4"
 
-    // Modulation ranges (fixed destinations, as shown in the UI)
-    static constexpr float envAmtOctaves = 6.0f;      // Env 2 at full Env Amt moves the cutoff ±6 octaves
-    static constexpr float lfoCutoffOctaves = 3.0f;   // LFO 3 → cutoff, at 100 % depth
-    static constexpr float lfoPosRange = 0.5f;        // LFO 1 → grain position, ± half the region
-
-    explicit SamplerEngine (Params);
+    explicit SamplerEngine (ParamList);
     ~SamplerEngine();
 
     void prepare (double sampleRate);
 
-    // Audio thread. Adds the voices into `out` (which the caller has cleared).
-    void process (juce::AudioBuffer<float>& out, const juce::MidiBuffer& midi, bool transportPlaying);
+    // Audio thread. Adds the voices into `main` (which the caller has cleared). Layers routed to
+    // Bus 2–4 go to aux[0..2] when that pointer isn't null, otherwise to main.
+    void process (juce::AudioBuffer<float>& main, juce::AudioBuffer<float>* const* aux, const juce::MidiBuffer& midi, bool transportPlaying);
+    void process (juce::AudioBuffer<float>& main, const juce::MidiBuffer& midi, bool transportPlaying)
+    {
+        juce::AudioBuffer<float>* none[numAuxOutputs] {};
+        process (main, none, midi, transportPlaying);
+    }
 
     // Any thread. Takes ownership; replaces a map that hasn't been picked up yet.
     void publish (std::unique_ptr<InstrumentMap>);
@@ -70,6 +57,18 @@ public:
     std::unique_ptr<InstrumentMap> popRetired();
 
     int getActiveVoices() const noexcept { return activeVoiceCount.load(); }
+
+    // Audio thread: a parameter's value this block, including global modulation.
+    float param (int index) const noexcept;
+    float param (int index, float fallback) const noexcept { return index >= 0 ? param (index) : fallback; }
+    int indexOf (const juce::String& id) const noexcept { return ids.indexOf (id); }
+    const juce::StringArray& paramIds() const noexcept { return ids; }
+
+    // Audio thread: the current instrument's FX order.
+    std::array<int, 5> fxOrder() const noexcept { return map != nullptr ? map->fxOrder : std::array<int, 5> { 0, 1, 2, 3, 4 }; }
+
+    // Any thread: where an RR group's counter is (for the inspector's Position readout).
+    int rrPosition (int group) const noexcept { return group >= 0 && group < maxRRGroups ? rrShown[(size_t) group].load (std::memory_order_relaxed) : 0; }
 
 private:
     struct Grain
@@ -106,24 +105,21 @@ private:
 
         float gainL = 1, gainR = 1;
         float level = 0;                 // last envelope × gain, for "quietest"
-        juce::ADSR env;
+        juce::ADSR env;                  // Env 1: amp
         bool killing = false;            // fast fade-out (steal, choke, mono retrigger)
         float killGain = 1;
 
-        // sound design
-        juce::ADSR env2, env3;           // filter, mod
+        // modulation
+        juce::ADSR env2, env3;
         float env2Value = 0, env3Value = 0;
         struct LfoState { double phase = 0; float value = 0, held = 0; } lfos[4];
         double age = 0;                  // samples since the note started (LFO fade-in)
         int samplesSinceMod = 0;
-        struct Svf { float ic1 = 0, ic2 = 0; } svf[2][2];   // [stage][channel]
-        float k1 = 1.414f, a11 = 0, a12 = 0, a13 = 0;       // stage 1 (resonant)
-        float a21 = 0, a22 = 0, a23 = 0;                    // stage 2 of LP24 (Q 0.707)
-        std::vector<float> comb;         // two channels back to back; sized in prepare()
-        int combWrite = 0;
-        float combDelay = 1, combFeedback = 0;
-        float panModL = 1, panModR = 1;
-        float grainSizeMul = 1, grainSpray = 0, grainPosOffset = 0;
+        float pitchMod = 0, volumeMod = 1, panModL = 1, panModR = 1, startMod = 0;
+        float grainSizeMul = 1, grainDensityMul = 1, grainSpray = 0, grainPosOffset = 0, grainPitchRnd = 0;
+        mtya::VoiceFilter filter;
+        float cutoffOct = 0, resoSmoothed = 0;   // the knobs' values, smoothed (~10 ms) so jumps don't click
+        bool filterFresh = true;
 
         // granular
         Grain grains[maxGrains];
@@ -131,7 +127,7 @@ private:
         int untilNextGrain = 0;
     };
 
-    // Parameter values read once per block
+    // Parameter values read once per block (already modulated by the global sources)
     struct BlockParams
     {
         PlayMode playMode = PlayMode::oneShot;
@@ -144,6 +140,17 @@ private:
         int fltType = 1;
         float cutoff = 20000, reso = 0, driveDb = 0, envAmt = 0;
         struct Lfo { int shape = 0; float rate = 1, depth = 0, phase = 0, fadeMs = 0; } lfo[4];
+    };
+
+    // Indices of the parameters the engine reads (-1 when missing)
+    struct Ix
+    {
+        int playMode, start, end, loopStart, loopEnd, loopXfade, tune, fine;
+        int grnPos, grnSize, grnDensity, grnSpray, grnPitchRnd, grnFreeze;
+        int env1[4], env2[4], env3[4];
+        int fltType, fltCutoff, fltReso, fltDrive, fltEnvAmt;
+        int lfo[4][5];   // shape, rate, depth, phase, fade
+        int macro[4];
     };
 
     void readBlockParams();
@@ -168,11 +175,11 @@ private:
     void retarget (Voice&, int note, int velocity);
 
     // ---- rendering ----
-    void renderVoice (Voice&, juce::AudioBuffer<float>&, int start, int num);
+    void renderVoice (Voice&, int start, int num);
     void updateRegion (Voice&) const;
     float read (const SampleData&, int channel, double pos) const noexcept;
     void triggerGrain (Voice&);
-    void updateModulation (Voice&);
+    void updateModulation (Voice&, int rampSamples);
     void startModulation (Voice&);
 
     // ---- map handover ----
@@ -180,10 +187,13 @@ private:
     void collectDrainedMaps();
     bool pushRetired (InstrumentMap*);
 
-    Params params;
+    ParamList params;
+    juce::StringArray ids;
+    Ix ix {};
+    std::vector<float> paramOffset;                   // global modulation per parameter (normalised)
+    std::array<float, Mod::numTargets> globalMod {};  // global modulation of the voice targets
     BlockParams bp;
     double sampleRate = 44100.0;
-    int combLength = 1;                               // per channel, for a 20 Hz comb at this rate
 
     InstrumentMap* map = nullptr;                     // audio thread's current map
     std::atomic<InstrumentMap*> pending { nullptr };
@@ -195,6 +205,7 @@ private:
     std::atomic<int> activeVoiceCount { 0 };
     juce::uint64 voiceOrder = 0;
     juce::uint32 eventCounter = 0;
+    juce::AudioBuffer<float>* outputs[1 + numAuxOutputs] {};   // this block's main + aux buffers
 
     // key state
     std::array<juce::uint64, 128> keyOrder {};        // when each key went down, 0 = up
@@ -204,13 +215,14 @@ private:
     juce::uint64 keyCounter = 0;
     bool sustainPedal = false;
     int currentKeyswitch = -1;
-    float pitchBendSemis = 0;
+    float pitchBendSemis = 0, modWheel = 0, aftertouch = 0;
     int lastNote = 60;                                // for glide in poly mode
     bool hasLastNote = false;
 
     // Round robin. The state survives instrument edits; indexed by the map's RR group.
     static constexpr int maxRRGroups = 256;
     std::array<int, maxRRGroups> rrCounter {}, rrLast {};
+    std::array<std::atomic<int>, maxRRGroups> rrShown {};
     double samplesSinceNoteOn = 0;
     bool idleResetDone = true, wasPlaying = false;
 

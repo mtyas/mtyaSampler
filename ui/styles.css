@@ -331,12 +331,12 @@ td.grp { font-family: var(--font); font-size: 12px; color: var(--muted); }
 .takemap { flex: 1; }
 .tm-legend { display: flex; gap: 14px; flex-shrink: 0; }
 .tm-legend span { display: flex; align-items: center; gap: 5px; }
-.lg { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-.lg.pend { border: 1px solid #3A3E44; }
-.lg.cur { background: var(--acc); }
-.lg.done { background: var(--mod); }
-.lg.bad { background: var(--rec); }
-.lg.skip { background: repeating-linear-gradient(45deg, #3A3E44 0 2px, transparent 2px 4px); border: 1px solid #3A3E44; }
+.tm-legend .lg { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.tm-legend .lg.pend { border: 1px solid #3A3E44; }
+.tm-legend .lg.cur { background: var(--acc); }
+.tm-legend .lg.done { background: var(--mod); }
+.tm-legend .lg.bad { background: var(--rec); }
+.tm-legend .lg.skip { background: repeating-linear-gradient(45deg, #3A3E44 0 2px, transparent 2px 4px); border: 1px solid #3A3E44; }
 .tm-scroll { flex: 1; min-height: 0; overflow: auto; }
 .tm-grid { display: grid; gap: 3px; align-items: center; }
 .tm-head { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: center; white-space: nowrap; }

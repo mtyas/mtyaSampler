@@ -1,12 +1,18 @@
 #include "SamplerEngine.h"
+#include "ParameterSpec.h"
 
 namespace
 {
-    constexpr int pitchChunk = 32;           // samples between pitch/glide updates
+    constexpr int pitchChunk = 32;           // samples between pitch/modulation updates
     constexpr double killSeconds = 0.005;    // fade used when a voice is stolen or choked
     constexpr double endFadeSeconds = 0.003; // fade at the end of a one-shot or slice
     constexpr double idleResetSeconds = 2.0; // "2 s idle" round-robin reset
     constexpr float bendRangeSemis = 2.0f;
+
+    // What 100 % of each voice target means
+    constexpr float pitchRangeSemis = 24.0f, cutoffRangeOctaves = 6.0f, driveRangeDb = 24.0f;
+    constexpr float grainScaleOctaves = 2.0f, grainPitchRndRange = 12.0f;
+    constexpr float envAmtOctaves = 6.0f;    // Env 2 at full Env Amt moves the cutoff ±6 octaves
 
     float hann (float x) { return 0.5f - 0.5f * std::cos (juce::MathConstants<float>::twoPi * x); }
 
@@ -22,54 +28,61 @@ namespace
             default: return held;   // sample & hold: a new random value every cycle
         }
     }
-
-    // One step of a TPT state-variable filter (Simper). Returns low-pass; band-pass goes to `band`.
-    struct SvfOut { float low, band; };
-    inline SvfOut svfStep (float& ic1, float& ic2, float v0, float a1, float a2, float a3)
-    {
-        const auto v3 = v0 - ic2;
-        const auto v1 = a1 * ic1 + a2 * v3;
-        const auto v2 = ic2 + a2 * ic1 + a3 * v3;
-        ic1 = 2.0f * v1 - ic1;
-        ic2 = 2.0f * v2 - ic2;
-        return { v2, v1 };
-    }
 }
 
-SamplerEngine::Params SamplerEngine::Params::fromApvts (juce::AudioProcessorValueTreeState& apvts)
+SamplerEngine::ParamList SamplerEngine::makeParamList (const juce::var& spec, const std::function<std::atomic<float>* (const juce::String&)>& valueFor)
 {
-    auto p = [&apvts] (const char* id)
-    {
-        auto* v = apvts.getRawParameterValue (id);
-        jassert (v != nullptr);   // id missing from ui/params.json
-        return v;
-    };
-    Params r;
-    r.playMode = p ("play_mode");
-    r.start = p ("smp_start");          r.end = p ("smp_end");
-    r.loopStart = p ("loop_start");     r.loopEnd = p ("loop_end");     r.loopXfade = p ("loop_xfade");
-    r.tune = p ("tune");                r.fine = p ("fine");
-    r.grnPos = p ("grn_pos");           r.grnSize = p ("grn_size");     r.grnDensity = p ("grn_density");
-    r.grnSpray = p ("grn_spray");       r.grnPitchRnd = p ("grn_pitchrnd"); r.grnFreeze = p ("grn_freeze");
-    r.attack = p ("env1_attack");       r.decay = p ("env1_decay");
-    r.sustain = p ("env1_sustain");     r.release = p ("env1_release");
-
-    r.fltType = p ("flt_type");         r.fltCutoff = p ("flt_cutoff");  r.fltReso = p ("flt_reso");
-    r.fltDrive = p ("flt_drive");       r.fltEnvAmt = p ("flt_envamt");
-    r.env2 = { p ("env2_attack"), p ("env2_decay"), p ("env2_sustain"), p ("env2_release") };
-    r.env3 = { p ("env3_attack"), p ("env3_decay"), p ("env3_sustain"), p ("env3_release") };
-    for (int i = 0; i < 4; ++i)
-    {
-        const auto pre = "lfo" + juce::String (i + 1) + "_";
-        auto q = [&] (const char* name) { return p ((pre + name).toRawUTF8()); };
-        r.lfo[(size_t) i] = { q ("shape"), q ("rate"), q ("depth"), q ("phase"), q ("fade") };
-    }
-    return r;
+    ParamList list;
+    if (const auto* all = spec["params"].getArray())
+        for (const auto& p : *all)
+        {
+            ParamRef r;
+            r.id = p["id"].toString();
+            r.value = valueFor (r.id);
+            const auto type = p["type"].toString();
+            if (type == "float")
+            {
+                r.range = ParameterSpec::rangeFor (p);
+                r.modulatable = true;
+            }
+            else if (type == "choice")
+                r.range = { 0.0f, (float) juce::jmax (1, p["choices"].size() - 1), 1.0f };
+            else
+                r.range = { 0.0f, 1.0f, 1.0f };
+            list.push_back (r);
+        }
+    return list;
 }
 
-SamplerEngine::SamplerEngine (Params p) : params (p)
+SamplerEngine::SamplerEngine (ParamList p) : params (std::move (p))
 {
     rrLast.fill (-1);
+    for (const auto& r : params)
+        ids.add (r.id);
+    paramOffset.assign (params.size(), 0.0f);
+
+    auto i = [this] (const juce::String& id) { return ids.indexOf (id); };
+    ix.playMode = i ("play_mode");     ix.start = i ("smp_start");       ix.end = i ("smp_end");
+    ix.loopStart = i ("loop_start");   ix.loopEnd = i ("loop_end");      ix.loopXfade = i ("loop_xfade");
+    ix.tune = i ("tune");              ix.fine = i ("fine");
+    ix.grnPos = i ("grn_pos");         ix.grnSize = i ("grn_size");      ix.grnDensity = i ("grn_density");
+    ix.grnSpray = i ("grn_spray");     ix.grnPitchRnd = i ("grn_pitchrnd"); ix.grnFreeze = i ("grn_freeze");
+    const char* adsr[] = { "attack", "decay", "sustain", "release" };
+    for (int k = 0; k < 4; ++k)
+    {
+        ix.env1[k] = i (juce::String ("env1_") + adsr[k]);
+        ix.env2[k] = i (juce::String ("env2_") + adsr[k]);
+        ix.env3[k] = i (juce::String ("env3_") + adsr[k]);
+    }
+    ix.fltType = i ("flt_type");       ix.fltCutoff = i ("flt_cutoff");  ix.fltReso = i ("flt_reso");
+    ix.fltDrive = i ("flt_drive");     ix.fltEnvAmt = i ("flt_envamt");
+    const char* lfo[] = { "shape", "rate", "depth", "phase", "fade" };
+    for (int n = 0; n < 4; ++n)
+    {
+        for (int k = 0; k < 5; ++k)
+            ix.lfo[n][k] = i ("lfo" + juce::String (n + 1) + "_" + lfo[k]);
+        ix.macro[n] = i ("macro" + juce::String (n + 1));
+    }
 }
 
 SamplerEngine::~SamplerEngine()
@@ -83,12 +96,11 @@ SamplerEngine::~SamplerEngine()
 void SamplerEngine::prepare (double newSampleRate)
 {
     sampleRate = newSampleRate;
-    combLength = (int) std::ceil (sampleRate / 20.0) + 4;   // the lowest cutoff is 20 Hz
     for (auto& v : voices)
     {
         if (v.active)
             freeVoice (v);
-        v.comb.assign ((size_t) combLength * 2, 0.0f);
+        v.filter.prepare (sampleRate);
     }
     keyOrder.fill (0);
     sustainedKey.fill (false);
@@ -143,48 +155,93 @@ void SamplerEngine::pickUpNewMap()
 }
 
 // =====================================================================================
-// processing
+// parameters and global modulation
 // =====================================================================================
+float SamplerEngine::param (int index) const noexcept
+{
+    if (index < 0 || index >= (int) params.size())
+        return 0.0f;
+    const auto& p = params[(size_t) index];
+    const auto value = p.value != nullptr ? p.value->load (std::memory_order_relaxed) : p.range.start;
+    const auto offset = paramOffset[(size_t) index];
+    if (offset == 0.0f || ! p.modulatable)
+        return value;
+    return p.range.convertFrom0to1 (juce::jlimit (0.0f, 1.0f, p.range.convertTo0to1 (value) + offset));
+}
+
 void SamplerEngine::readBlockParams()
 {
-    auto get = [] (std::atomic<float>* p, float fallback) { return p != nullptr ? p->load() : fallback; };
-    bp.playMode    = (PlayMode) juce::jlimit (0, 4, juce::roundToInt (get (params.playMode, 0)));
-    bp.start       = get (params.start, 0) * 0.01f;
-    bp.end         = get (params.end, 100) * 0.01f;
-    bp.loopStart   = get (params.loopStart, 0) * 0.01f;
-    bp.loopEnd     = get (params.loopEnd, 100) * 0.01f;
-    bp.loopXfadeMs = get (params.loopXfade, 0);
-    bp.tuneSemis   = get (params.tune, 0) + get (params.fine, 0) * 0.01f + pitchBendSemis;
-    bp.grnPos      = get (params.grnPos, 50) * 0.01f;
-    bp.grnSizeMs   = juce::jmax (1.0f, get (params.grnSize, 80));
-    bp.grnDensity  = juce::jmax (0.1f, get (params.grnDensity, 20));
-    bp.grnSpray    = get (params.grnSpray, 0) * 0.01f;
-    bp.grnPitchRnd = get (params.grnPitchRnd, 0);
-    bp.grnFreeze   = get (params.grnFreeze, 0) >= 0.5f;
-    bp.env = { get (params.attack, 0.005f), get (params.decay, 0.1f), get (params.sustain, 100) * 0.01f, get (params.release, 0.1f) };
-    bp.env2 = { get (params.env2[0], 0.005f), get (params.env2[1], 0.1f), get (params.env2[2], 100) * 0.01f, get (params.env2[3], 0.1f) };
-    bp.env3 = { get (params.env3[0], 0.005f), get (params.env3[1], 0.1f), get (params.env3[2], 100) * 0.01f, get (params.env3[3], 0.1f) };
+    // Global sources: macros, mod wheel, aftertouch
+    std::array<float, Mod::numSources> source {};
+    for (int n = 0; n < 4; ++n)
+    {
+        const auto i = ix.macro[n];
+        source[(size_t) (Mod::macro1 + n)] = i >= 0 && params[(size_t) i].value != nullptr ? params[(size_t) i].value->load() * 0.01f : 0.0f;
+    }
+    source[Mod::modWheel] = modWheel;
+    source[Mod::aftertouch] = aftertouch;
+
+    std::fill (paramOffset.begin(), paramOffset.end(), 0.0f);
+    globalMod.fill (0.0f);
+    if (map != nullptr)
+        for (const auto& r : map->routes)
+            if (Mod::isGlobal (r.source))
+            {
+                const auto v = source[(size_t) r.source] * r.amount;
+                if (r.param >= 0 && r.param < (int) paramOffset.size())
+                    paramOffset[(size_t) r.param] += v;
+                else if (r.target >= 0)
+                    globalMod[(size_t) r.target] += v;
+            }
+
+    auto get = [this] (int i, float fallback) { return param (i, fallback); };
+    bp.playMode    = (PlayMode) juce::jlimit (0, 4, juce::roundToInt (get (ix.playMode, 0)));
+    bp.start       = get (ix.start, 0) * 0.01f;
+    bp.end         = get (ix.end, 100) * 0.01f;
+    bp.loopStart   = get (ix.loopStart, 0) * 0.01f;
+    bp.loopEnd     = get (ix.loopEnd, 100) * 0.01f;
+    bp.loopXfadeMs = get (ix.loopXfade, 0);
+    bp.tuneSemis   = get (ix.tune, 0) + get (ix.fine, 0) * 0.01f + pitchBendSemis;
+    bp.grnPos      = get (ix.grnPos, 50) * 0.01f;
+    bp.grnSizeMs   = juce::jmax (1.0f, get (ix.grnSize, 80));
+    bp.grnDensity  = juce::jmax (0.1f, get (ix.grnDensity, 20));
+    bp.grnSpray    = get (ix.grnSpray, 0) * 0.01f;
+    bp.grnPitchRnd = get (ix.grnPitchRnd, 0);
+    bp.grnFreeze   = get (ix.grnFreeze, 0) >= 0.5f;
+    auto adsr = [&get] (const int (&e)[4]) -> juce::ADSR::Parameters
+    {
+        return { get (e[0], 0.005f), get (e[1], 0.1f), get (e[2], 100) * 0.01f, get (e[3], 0.1f) };
+    };
+    bp.env  = adsr (ix.env1);
+    bp.env2 = adsr (ix.env2);
+    bp.env3 = adsr (ix.env3);
 
     // With no filter parameters (tests), the defaults leave the sound untouched.
-    bp.fltType = juce::jlimit (0, 4, juce::roundToInt (get (params.fltType, 1)));
-    bp.cutoff  = get (params.fltCutoff, 20000);
-    bp.reso    = juce::jlimit (0.0f, 1.0f, get (params.fltReso, 0) * 0.01f);
-    bp.driveDb = juce::jmax (0.0f, get (params.fltDrive, 0));
-    bp.envAmt  = get (params.fltEnvAmt, 0) * 0.01f;
-    for (size_t i = 0; i < 4; ++i)
+    bp.fltType = juce::jlimit (0, 4, juce::roundToInt (get (ix.fltType, 1)));
+    bp.cutoff  = get (ix.fltCutoff, 20000);
+    bp.reso    = juce::jlimit (0.0f, 1.0f, get (ix.fltReso, 0) * 0.01f);
+    bp.driveDb = juce::jmax (0.0f, get (ix.fltDrive, 0));
+    bp.envAmt  = get (ix.fltEnvAmt, 0) * 0.01f;
+    for (size_t n = 0; n < 4; ++n)
     {
-        const auto& l = params.lfo[i];
-        bp.lfo[i] = { juce::jlimit (0, 4, juce::roundToInt (get (l.shape, 0))), get (l.rate, 1), get (l.depth, 0) * 0.01f,
-                      get (l.phase, 0) / 360.0f, get (l.fade, 0) };
+        const auto& l = ix.lfo[n];
+        bp.lfo[n] = { juce::jlimit (0, 4, juce::roundToInt (get (l[0], 0))), get (l[1], 1), get (l[2], 0) * 0.01f,
+                      get (l[3], 0) / 360.0f, get (l[4], 0) };
     }
 }
 
-void SamplerEngine::process (juce::AudioBuffer<float>& out, const juce::MidiBuffer& midi, bool transportPlaying)
+// =====================================================================================
+// processing
+// =====================================================================================
+void SamplerEngine::process (juce::AudioBuffer<float>& main, juce::AudioBuffer<float>* const* aux, const juce::MidiBuffer& midi, bool transportPlaying)
 {
     pickUpNewMap();
     readBlockParams();
 
-    const int numSamples = out.getNumSamples();
+    const int numSamples = main.getNumSamples();
+    outputs[0] = &main;
+    for (int i = 0; i < numAuxOutputs; ++i)
+        outputs[i + 1] = aux != nullptr && aux[i] != nullptr && aux[i]->getNumSamples() >= numSamples ? aux[i] : nullptr;
 
     // Round-robin resets
     if (transportPlaying && ! wasPlaying)
@@ -213,7 +270,7 @@ void SamplerEngine::process (juce::AudioBuffer<float>& out, const juce::MidiBuff
         if (eventPos > pos)
         {
             for (auto& v : voices)
-                renderVoice (v, out, pos, eventPos - pos);
+                renderVoice (v, pos, eventPos - pos);
             now += eventPos - pos;
             pos = eventPos;
         }
@@ -222,7 +279,7 @@ void SamplerEngine::process (juce::AudioBuffer<float>& out, const juce::MidiBuff
     if (pos < numSamples)
     {
         for (auto& v : voices)
-            renderVoice (v, out, pos, numSamples - pos);
+            renderVoice (v, pos, numSamples - pos);
         now += numSamples - pos;
     }
 
@@ -270,8 +327,12 @@ void SamplerEngine::handleMidi (const juce::MidiMessage& m)
     else if (m.isPitchWheel())
     {
         pitchBendSemis = (float) (m.getPitchWheelValue() - 8192) / 8192.0f * bendRangeSemis;
-        readBlockParams();   // tune includes the bend
+        bp.tuneSemis = param (ix.tune, 0) + param (ix.fine, 0) * 0.01f + pitchBendSemis;
     }
+    else if (m.isController() && m.getControllerNumber() == 1)
+        modWheel = (float) m.getControllerValue() / 127.0f;   // takes effect from the next block
+    else if (m.isChannelPressure())
+        aftertouch = (float) m.getChannelPressureValue() / 127.0f;
     else if (m.isAllSoundOff())
     {
         for (auto& v : voices)
@@ -489,6 +550,7 @@ int SamplerEngine::pickVariation (const Layer& layer, int* picks)
         }
         rrLast[g] = pick;
         picks[g] = pick;
+        rrShown[g].store (layer.rrMode == Layer::RRMode::cycle ? rrCounter[g] : pick, std::memory_order_relaxed);
     }
     return picks[g] % numSamples;
 }
@@ -572,7 +634,7 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
 
     const auto vn = (float) velocity / 127.0f;
     const auto velGain = (1.0f - layer.velToVol) + layer.velToVol * vn * vn;
-    const auto g = layer.gain * velGain * layer.zoneGain (note, velocity) * extraGain;
+    const auto g = layer.gain * layer.normalizeGain * velGain * layer.zoneGain (note, velocity) * extraGain;
     v.gainL = g * layer.panL;
     v.gainR = g * layer.panR;
 
@@ -585,13 +647,13 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
     }
 
     updateRegion (v);
-    v.pos = v.regionStart;
+    startModulation (v);   // also gives the sample-start modulation for this note
+    v.pos = v.regionStart + juce::jlimit (0.0, 0.999, (double) v.startMod) * (v.regionEnd - v.regionStart);
     v.grainHead = v.regionStart + bp.grnPos * (v.regionEnd - v.regionStart);
     v.untilNextGrain = 0;
     for (auto& gr : v.grains)
         gr.active = false;
 
-    startModulation (v);
     v.active = true;
     return vp;
 }
@@ -685,10 +747,10 @@ void SamplerEngine::triggerGrain (Voice& v)
             continue;
         const auto region = v.regionEnd - v.regionStart;
         const auto spray = (double) v.grainSpray * region * (random.nextDouble() - 0.5);
-        const auto pitch = bp.grnPitchRnd > 0 ? std::exp2 ((random.nextFloat() * 2.0f - 1.0f) * bp.grnPitchRnd / 12.0f) : 1.0f;
+        const auto pitch = v.grainPitchRnd > 0 ? std::exp2 ((random.nextFloat() * 2.0f - 1.0f) * v.grainPitchRnd / 12.0f) : 1.0f;
         g.inc = v.inc * pitch;
         g.length = juce::jmax (8, (int) (bp.grnSizeMs * v.grainSizeMul * 0.001 * sampleRate));
-        // Centre the grain on the chosen position (LFO 1 moves it)
+        // Centre the grain on the chosen position (modulation can move it)
         const auto centre = v.grainHead + (double) v.grainPosOffset * region + spray;
         g.pos = juce::jlimit (v.regionStart, v.regionEnd, centre) - g.inc * g.length * 0.5;
         g.pos = juce::jmax (0.0, g.pos);
@@ -705,16 +767,12 @@ void SamplerEngine::startModulation (Voice& v)
     v.samplesSinceMod = 0;
     for (size_t i = 0; i < 4; ++i)
         v.lfos[i] = { (double) bp.lfo[i].phase, 0.0f, random.nextFloat() * 2.0f - 1.0f };
-    for (auto& stage : v.svf)
-        for (auto& ch : stage)
-            ch = {};
-    if (bp.fltType == 4)
-        std::fill (v.comb.begin(), v.comb.end(), 0.0f);
-    v.combWrite = 0;
-    updateModulation (v);
+    v.filter.reset();
+    v.filterFresh = true;
+    updateModulation (v, 0);
 }
 
-void SamplerEngine::updateModulation (Voice& v)
+void SamplerEngine::updateModulation (Voice& v, int rampSamples)
 {
     // LFOs: free-running per voice from the note start, with a fade-in
     const auto elapsed = (double) v.samplesSinceMod;
@@ -732,48 +790,61 @@ void SamplerEngine::updateModulation (Voice& v)
         st.value = lfoShape (p.shape, u, st.held) * p.depth * fade;
     }
 
-    // Cutoff: Env 2 through Env Amt, plus LFO 3
-    const auto octaves = v.env2Value * bp.envAmt * envAmtOctaves + v.lfos[2].value * lfoCutoffOctaves;
-    const auto fc = juce::jlimit (20.0f, (float) juce::jmin (20000.0, sampleRate * 0.45), bp.cutoff * std::exp2 (octaves));
+    // Sum the routes into each target: global part (this block) + this voice's sources
+    std::array<float, Mod::numTargets> mod = globalMod;
+    std::array<float, Mod::numSources> source {};
+    source[Mod::env2] = v.env2Value;
+    source[Mod::env3] = v.env3Value;
+    for (int i = 0; i < 4; ++i)
+        source[(size_t) (Mod::lfo1 + i)] = v.lfos[i].value;
+    source[Mod::velocity] = (float) v.velocity / 127.0f;
+    source[Mod::key] = (float) (v.note - 60) / 60.0f;
+    for (const auto& r : v.map->routes)
+        if (! Mod::isGlobal (r.source) && r.target >= 0)
+            mod[(size_t) r.target] += source[(size_t) r.source] * r.amount;
 
-    if (bp.fltType == 4)
+    v.pitchMod = mod[Mod::pitch] * pitchRangeSemis;
+    v.volumeMod = juce::jlimit (0.0f, 4.0f, 1.0f + mod[Mod::volume]);
+    const auto pan = juce::jlimit (-1.0f, 1.0f, mod[Mod::pan]);
+    v.panModL = juce::jmin (1.0f, 1.0f - pan);
+    v.panModR = juce::jmin (1.0f, 1.0f + pan);
+    v.startMod = mod[Mod::start];
+    v.grainPosOffset = mod[Mod::grainPos];
+    v.grainSizeMul = std::exp2 (mod[Mod::grainSize] * grainScaleOctaves);
+    v.grainDensityMul = std::exp2 (mod[Mod::grainDensity] * grainScaleOctaves);
+    v.grainSpray = juce::jlimit (0.0f, 1.0f, bp.grnSpray + mod[Mod::grainSpray]);
+    v.grainPitchRnd = juce::jmax (0.0f, bp.grnPitchRnd + mod[Mod::grainPitchRnd] * grainPitchRndRange);
+
+    // Filter: the knobs (smoothed, in octaves), Env 2 through Env Amt, plus routed modulation
+    const auto knobOct = std::log2 (juce::jmax (20.0f, bp.cutoff));
+    if (v.filterFresh)
     {
-        // Comb: peaks at the cutoff and its multiples; resonance is the feedback
-        v.combDelay = juce::jlimit (1.0f, (float) (combLength - 2), (float) (sampleRate / fc));
-        v.combFeedback = juce::jmin (0.95f, 0.2f + bp.reso * 0.75f);
+        v.cutoffOct = knobOct;
+        v.resoSmoothed = bp.reso;
+        v.filterFresh = false;
     }
     else
     {
-        // Same resonance → Q mapping as the UI's response curve
-        const auto q = 0.707f + bp.reso * 9.0f;
-        const auto g = (float) std::tan (juce::MathConstants<double>::pi * fc / sampleRate);
-        v.k1 = 1.0f / q;
-        v.a11 = 1.0f / (1.0f + g * (g + v.k1));
-        v.a12 = g * v.a11;
-        v.a13 = g * v.a12;
-        constexpr float k2 = 1.41421356f;
-        v.a21 = 1.0f / (1.0f + g * (g + k2));
-        v.a22 = g * v.a21;
-        v.a23 = g * v.a22;
+        const auto a = 1.0f - std::exp (-(float) juce::jmax (1, rampSamples) / (0.01f * (float) sampleRate));
+        v.cutoffOct += a * (knobOct - v.cutoffOct);
+        v.resoSmoothed += a * (bp.reso - v.resoSmoothed);
     }
-
-    // LFO 2 → pan (balance), LFO 1 → grain position, LFO 4 → spray, Env 3 → grain size (×0.5…×2, ×1 at half)
-    const auto pan = v.lfos[1].value;
-    v.panModL = juce::jmin (1.0f, 1.0f - pan);
-    v.panModR = juce::jmin (1.0f, 1.0f + pan);
-    v.grainPosOffset = v.lfos[0].value * lfoPosRange;
-    v.grainSpray = juce::jlimit (0.0f, 1.0f, bp.grnSpray + v.lfos[3].value);
-    v.grainSizeMul = std::exp2 (v.env3Value * 2.0f - 1.0f);
+    const auto octaves = v.cutoffOct + v.env2Value * bp.envAmt * envAmtOctaves + mod[Mod::cutoff] * cutoffRangeOctaves;
+    v.filter.setTargets (bp.fltType, std::exp2 (octaves), v.resoSmoothed + mod[Mod::reso],
+                         bp.driveDb + mod[Mod::drive] * driveRangeDb, rampSamples);
 }
 
-void SamplerEngine::renderVoice (Voice& v, juce::AudioBuffer<float>& out, int start, int num)
+void SamplerEngine::renderVoice (Voice& v, int start, int num)
 {
     if (! v.active)
         return;
 
-    auto* outL = out.getWritePointer (0, start);
-    auto* outR = out.getWritePointer (out.getNumChannels() > 1 ? 1 : 0, start);
-    const bool stereoOut = out.getNumChannels() > 1;
+    auto* out = outputs[(size_t) juce::jlimit (0, numAuxOutputs, v.layer->output)];
+    if (out == nullptr)
+        out = outputs[0];
+    auto* outL = out->getWritePointer (0, start);
+    auto* outR = out->getWritePointer (out->getNumChannels() > 1 ? 1 : 0, start);
+    const bool stereoOut = out->getNumChannels() > 1;
     const auto& smp = *v.sample;
     const bool stereoSample = smp.audio.getNumChannels() > 1;
     const auto killStep = (float) (1.0 / (killSeconds * sampleRate));
@@ -782,30 +853,24 @@ void SamplerEngine::renderVoice (Voice& v, juce::AudioBuffer<float>& out, int st
     // Granular: the cloud is normalised by how many grains overlap
     const auto overlap = bp.grnDensity * bp.grnSizeMs * 0.001f;
     const auto grainNorm = 1.0f / std::sqrt (juce::jmax (1.0f, overlap));
-    const auto grainInterval = sampleRate / bp.grnDensity;
     const auto freezePos = v.regionStart + bp.grnPos * (v.regionEnd - v.regionStart);
-
-    // Drive: soft clipping that keeps quiet signals at the same level, blended in over the first 3 dB
-    const auto driveGain = juce::Decibels::decibelsToGain (bp.driveDb);
-    const auto driveMix = juce::jmin (1.0f, bp.driveDb / 3.0f);
-    auto drive = [driveGain, driveMix] (float x) { return x + (std::tanh (x * driveGain) / driveGain - x) * driveMix; };
 
     for (int i = 0; i < num; ++i)
     {
-        // Pitch and glide, every few samples
-        if ((i % pitchChunk) == 0)
+        // Pitch, glide and modulation, every few samples
+        if (v.samplesSinceMod >= pitchChunk || i == 0)
         {
             if (v.glideStep != 0.0f)
             {
-                v.semis += v.glideStep * (float) pitchChunk;
+                v.semis += v.glideStep * (float) juce::jmax (1, v.samplesSinceMod);
                 if ((v.glideStep > 0 && v.semis >= v.targetSemis) || (v.glideStep < 0 && v.semis <= v.targetSemis))
                 {
                     v.semis = v.targetSemis;
                     v.glideStep = 0;
                 }
             }
-            v.inc = v.rateScale * std::exp2 ((v.semis + bp.tuneSemis) / 12.0f);
-            updateModulation (v);
+            updateModulation (v, pitchChunk);
+            v.inc = v.rateScale * std::exp2 ((v.semis + bp.tuneSemis + v.pitchMod) / 12.0f);
         }
 
         float l = 0, r = 0;
@@ -883,7 +948,8 @@ void SamplerEngine::renderVoice (Voice& v, juce::AudioBuffer<float>& out, int st
                 if (--v.untilNextGrain <= 0)
                 {
                     triggerGrain (v);
-                    v.untilNextGrain = juce::jmax (1, (int) (grainInterval * (0.75 + 0.5 * random.nextDouble())));
+                    const auto interval = sampleRate / (bp.grnDensity * v.grainDensityMul);
+                    v.untilNextGrain = juce::jmax (1, (int) (interval * (0.75 + 0.5 * random.nextDouble())));
                 }
                 for (auto& g : v.grains)
                 {
@@ -921,45 +987,8 @@ void SamplerEngine::renderVoice (Voice& v, juce::AudioBuffer<float>& out, int st
             return;
         }
 
-        // ---- drive + filter ----
-        if (driveMix > 0.0f)
-        {
-            l = drive (l);
-            r = stereoSample ? drive (r) : l;
-        }
-        if (bp.fltType == 4)
-        {
-            const auto fb = v.combFeedback;
-            for (int ch = 0; ch < (stereoSample ? 2 : 1); ++ch)
-            {
-                auto* line = v.comb.data() + ch * combLength;
-                auto readPos = (float) v.combWrite - v.combDelay;
-                if (readPos < 0) readPos += (float) combLength;
-                const int i0 = (int) readPos;
-                const auto frac = readPos - (float) i0;
-                const auto delayed = line[i0] + frac * (line[(i0 + 1) % combLength] - line[i0]);
-                auto& x = ch == 0 ? l : r;
-                const auto y = x + fb * delayed;
-                line[v.combWrite] = y;
-                x = y * (1.0f - fb);
-            }
-            v.combWrite = (v.combWrite + 1) % combLength;
-        }
-        else
-        {
-            for (int ch = 0; ch < (stereoSample ? 2 : 1); ++ch)
-            {
-                auto& x = ch == 0 ? l : r;
-                const auto s1 = svfStep (v.svf[0][ch].ic1, v.svf[0][ch].ic2, x, v.a11, v.a12, v.a13);
-                switch (bp.fltType)
-                {
-                    case 0:  x = svfStep (v.svf[1][ch].ic1, v.svf[1][ch].ic2, s1.low, v.a21, v.a22, v.a23).low; break;
-                    case 2:  x = v.k1 * s1.band; break;
-                    case 3:  x = x - v.k1 * s1.band - s1.low; break;
-                    default: x = s1.low; break;
-                }
-            }
-        }
+        // ---- filter (with drive) and modulated pan ----
+        v.filter.process (l, r, stereoSample);
         if (! stereoSample)
             r = l;
         l *= v.panModL;
@@ -970,7 +999,7 @@ void SamplerEngine::renderVoice (Voice& v, juce::AudioBuffer<float>& out, int st
         ++v.samplesSinceMod;
         v.age += 1.0;
 
-        auto gain = v.env.getNextSample();
+        auto gain = v.env.getNextSample() * v.volumeMod;
         if (v.killing)
         {
             v.killGain -= killStep;

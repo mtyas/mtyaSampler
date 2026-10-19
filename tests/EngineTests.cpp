@@ -6,6 +6,8 @@
 
 #include "../Source/InstrumentMap.h"
 #include "../Source/SamplerEngine.h"
+#include "../Source/FxChain.h"
+#include "../Source/SampleTools.h"
 #include <iostream>
 
 namespace
@@ -40,52 +42,62 @@ namespace
         return file;
     }
 
-    juce::File sine (const juce::File& dir, const juce::String& name, double hz, double seconds = 1.0, double rate = 44100.0)
+    juce::File sine (const juce::File& dir, const juce::String& name, double hz, double seconds = 1.0, double rate = 44100.0, float amplitude = 0.5f)
     {
         return writeWav (dir, name, rate, (int) (seconds * rate),
-                         [=] (int i) { return 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / rate); });
+                         [=] (int i) { return amplitude * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / rate); });
     }
 
-    // Parameter values the engine reads (normally owned by the APVTS)
+    // The real parameter list from ui/params.json, with our own storage instead of an APVTS
+    juce::var loadSpec()
+    {
+        return juce::JSON::parse (juce::File (__FILE__).getParentDirectory().getSiblingFile ("ui").getChildFile ("params.json"));
+    }
+
     struct FakeParams
     {
         std::map<juce::String, std::unique_ptr<std::atomic<float>>> values;
+        juce::var spec = loadSpec();
 
-        std::atomic<float>* operator() (const char* id, float v)
-        {
-            auto& slot = values[id];
-            slot = std::make_unique<std::atomic<float>> (v);
-            return slot.get();
-        }
         void set (const char* id, float v) { jassert (values.count (id) > 0); values[id]->store (v); }
 
-        SamplerEngine::Params make()
+        SamplerEngine::ParamList make()
         {
-            SamplerEngine::Params p;
-            auto& self = *this;
-            p.playMode = self ("play_mode", 0);
-            p.start = self ("smp_start", 0);        p.end = self ("smp_end", 100);
-            p.loopStart = self ("loop_start", 20);  p.loopEnd = self ("loop_end", 80);
-            p.loopXfade = self ("loop_xfade", 10);
-            p.tune = self ("tune", 0);              p.fine = self ("fine", 0);
-            p.grnPos = self ("grn_pos", 50);        p.grnSize = self ("grn_size", 80);
-            p.grnDensity = self ("grn_density", 30); p.grnSpray = self ("grn_spray", 10);
-            p.grnPitchRnd = self ("grn_pitchrnd", 0); p.grnFreeze = self ("grn_freeze", 0);
-            p.attack = self ("env1_attack", 0.001f); p.decay = self ("env1_decay", 0.1f);
-            p.sustain = self ("env1_sustain", 100); p.release = self ("env1_release", 0.01f);
-            // Filter wide open and no modulation, so the sampler checks hear the raw samples
-            p.fltType = self ("flt_type", 1);       p.fltCutoff = self ("flt_cutoff", 20000);
-            p.fltReso = self ("flt_reso", 0);       p.fltDrive = self ("flt_drive", 0);
-            p.fltEnvAmt = self ("flt_envamt", 0);
-            p.env2 = { self ("env2_attack", 0.001f), self ("env2_decay", 0.1f), self ("env2_sustain", 100), self ("env2_release", 0.01f) };
-            p.env3 = { self ("env3_attack", 0.001f), self ("env3_decay", 0.1f), self ("env3_sustain", 50), self ("env3_release", 0.01f) };
-            for (int i = 0; i < 4; ++i)
+            auto list = SamplerEngine::makeParamList (spec, [this] (const juce::String& id)
             {
-                const auto pre = "lfo" + juce::String (i + 1) + "_";
-                auto q = [&] (const char* name, float v) { return self ((pre + name).toRawUTF8(), v); };
-                p.lfo[(size_t) i] = { q ("shape", 0), q ("rate", 1), q ("depth", 0), q ("phase", 0), q ("fade", 0) };
+                auto& slot = values[id];
+                slot = std::make_unique<std::atomic<float>> (0.0f);
+                return slot.get();
+            });
+            for (const auto& p : *spec["params"].getArray())
+                values[p["id"].toString()]->store ((float) (double) p["default"]);
+            neutral();
+            return list;
+        }
+
+        // Filter wide open, no modulation, fast envelopes, no effects: the sampler checks hear the raw samples
+        void neutral()
+        {
+            const std::pair<const char*, float> v[] = {
+                { "play_mode", 0 }, { "smp_start", 0 }, { "smp_end", 100 }, { "loop_start", 20 }, { "loop_end", 80 }, { "loop_xfade", 10 },
+                { "tune", 0 }, { "fine", 0 }, { "grn_pos", 50 }, { "grn_size", 80 }, { "grn_density", 30 }, { "grn_spray", 10 },
+                { "grn_pitchrnd", 0 }, { "grn_freeze", 0 },
+                { "env1_attack", 0.001f }, { "env1_decay", 0.1f }, { "env1_sustain", 100 }, { "env1_release", 0.01f },
+                { "env2_attack", 0.001f }, { "env2_decay", 0.1f }, { "env2_sustain", 100 }, { "env2_release", 0.01f },
+                { "env3_attack", 0.001f }, { "env3_decay", 0.1f }, { "env3_sustain", 50 }, { "env3_release", 0.01f },
+                { "flt_type", 1 }, { "flt_cutoff", 20000 }, { "flt_reso", 0 }, { "flt_drive", 0 }, { "flt_envamt", 0 },
+                { "macro1", 0 }, { "macro2", 0 }, { "macro3", 0 }, { "macro4", 0 },
+                { "fx_sat_on", 0 }, { "fx_crush_on", 0 }, { "fx_chorus_on", 0 }, { "fx_delay_on", 0 }, { "fx_reverb_on", 0 } };
+            for (const auto& [id, value] : v)
+                set (id, value);
+            for (int i = 1; i <= 4; ++i)
+            {
+                set (("lfo" + juce::String (i) + "_depth").toRawUTF8(), 0);
+                set (("lfo" + juce::String (i) + "_rate").toRawUTF8(), 1);
+                set (("lfo" + juce::String (i) + "_phase").toRawUTF8(), 0);
+                set (("lfo" + juce::String (i) + "_fade").toRawUTF8(), 0);
+                set (("lfo" + juce::String (i) + "_shape").toRawUTF8(), 0);
             }
-            return p;
         }
     };
 
@@ -95,6 +107,8 @@ namespace
         FakeParams fp;
         SampleCache cache;
         std::unique_ptr<SamplerEngine> engine;
+        std::unique_ptr<FxChain> fx;
+        double bpm = 120;
         juce::AudioBuffer<float> out { 2, 0 };
         juce::MidiBuffer pendingMidi;
         int missing = 0;
@@ -103,12 +117,14 @@ namespace
         {
             engine = std::make_unique<SamplerEngine> (fp.make());
             engine->prepare (hostRate);
+            fx = std::make_unique<FxChain> (*engine);
+            fx->prepare (hostRate, blockSize);
             load (json);
         }
 
         void load (const juce::String& json)
         {
-            auto map = buildInstrumentMap (juce::JSON::parse (json), cache);
+            auto map = buildInstrumentMap (juce::JSON::parse (json), cache, engine->paramIds());
             missing = map->missingSamples;
             engine->publish (std::move (map));
         }
@@ -127,6 +143,7 @@ namespace
                 const int n = juce::jmin (blockSize, total - pos);
                 juce::AudioBuffer<float> block (out.getArrayOfWritePointers(), 2, pos, n);
                 engine->process (block, pendingMidi, playing);
+                fx->process (block, bpm);
                 pendingMidi.clear();
             }
         }
@@ -397,20 +414,72 @@ int main()
         const auto hp = level (s200, [] (FakeParams& f) { f.set ("flt_type", 3); f.set ("flt_cutoff", 4000); }) - open200;
         check (hp < -40, "HP at 4 kHz cuts 200 Hz (" + juce::String (hp, 1) + " dB)");
 
-        const auto open2k = level (s2000, [] (FakeParams&) {});
-        const auto bpPeak = level (s2000, [] (FakeParams& f) { f.set ("flt_type", 2); f.set ("flt_cutoff", 2000); f.set ("flt_reso", 50); }) - open2k;
-        const auto bpOff = level (s200, [] (FakeParams& f) { f.set ("flt_type", 2); f.set ("flt_cutoff", 2000); f.set ("flt_reso", 50); }) - open200;
+        // Quiet tones for the clean response (loud ones make the resonance saturate, by design)
+        const auto q2000 = sine (dir, "q2000.wav", 2000.0, 1.0, 44100.0, 0.1f), q200 = sine (dir, "q200.wav", 200.0, 1.0, 44100.0, 0.1f);
+        const auto q500 = sine (dir, "q500.wav", 500.0, 1.0, 44100.0, 0.1f), q750 = sine (dir, "q750.wav", 750.0, 1.0, 44100.0, 0.1f);
+        const auto openQ2k = level (q2000, [] (FakeParams&) {}), openQ200 = level (q200, [] (FakeParams&) {});
+        const auto bpPeak = level (q2000, [] (FakeParams& f) { f.set ("flt_type", 2); f.set ("flt_cutoff", 2000); f.set ("flt_reso", 50); }) - openQ2k;
+        const auto bpOff = level (q200, [] (FakeParams& f) { f.set ("flt_type", 2); f.set ("flt_cutoff", 2000); f.set ("flt_reso", 50); }) - openQ200;
         check (std::abs (bpPeak) < 1.0f && bpOff < -30, "BP passes its centre at unity and cuts far below it (" + juce::String (bpPeak, 1) + " / " + juce::String (bpOff, 1) + " dB)");
+
+        const auto loudBp = level (s2000, [] (FakeParams& f) { f.set ("flt_type", 2); f.set ("flt_cutoff", 2000); f.set ("flt_reso", 50); }) - level (s2000, [] (FakeParams&) {});
+        check (loudBp < bpPeak - 1.0f && loudBp > -12.0f, "a loud tone on a resonant peak compresses gently (" + juce::String (loudBp, 1) + " dB)");
+
+        const auto open2k = level (s2000, [] (FakeParams&) {});
 
         const auto shut = level (s2000, [] (FakeParams& f) { f.set ("flt_type", 0); f.set ("flt_cutoff", 200); }) - open2k;
         const auto envOpen = level (s2000, [] (FakeParams& f) { f.set ("flt_type", 0); f.set ("flt_cutoff", 200); f.set ("flt_envamt", 100); f.set ("env2_sustain", 100); }) - open2k;
         check (shut < -30 && envOpen > -1, "Env 2 at full Env Amt opens a 200 Hz LP24 (2 kHz: " + juce::String (shut, 1) + " dB → " + juce::String (envOpen, 1) + " dB)");
 
-        const auto open500 = level (s500, [] (FakeParams&) {});
-        const auto open750 = level (s750, [] (FakeParams&) {});
-        const auto combPeak = level (s500, [] (FakeParams& f) { f.set ("flt_type", 4); f.set ("flt_cutoff", 500); f.set ("flt_reso", 100); }) - open500;
-        const auto combNotch = level (s750, [] (FakeParams& f) { f.set ("flt_type", 4); f.set ("flt_cutoff", 500); f.set ("flt_reso", 100); }) - open750;
-        check (std::abs (combPeak) < 1.5f && combNotch < -20, "comb at 500 Hz: peak at 500, notch at 750 (" + juce::String (combPeak, 1) + " / " + juce::String (combNotch, 1) + " dB)");
+        const auto open500 = level (q500, [] (FakeParams&) {});
+        const auto open750 = level (q750, [] (FakeParams&) {});
+        const auto combPeak = level (q500, [] (FakeParams& f) { f.set ("flt_type", 4); f.set ("flt_cutoff", 500); f.set ("flt_reso", 80); }) - open500;
+        const auto combNotch = level (q750, [] (FakeParams& f) { f.set ("flt_type", 4); f.set ("flt_cutoff", 500); f.set ("flt_reso", 80); }) - open750;
+        // Notch depth in theory: (1 - fb) / (1 + fb) = -19.1 dB at 80 %
+        check (std::abs (combPeak) < 1.5f && combNotch < -17, "comb at 500 Hz: peak at 500, notch at 750 (" + juce::String (combPeak, 1) + " / " + juce::String (combNotch, 1) + " dB)");
+
+        // Self-oscillation: a short click, then silence; at full resonance the filter keeps singing at its cutoff
+        const auto click = writeWav (dir, "click.wav", hostRate, (int) hostRate * 2, [] (int i) { return i < 48 ? 0.5f : 0.0f; });
+        for (auto [type, name] : { std::pair { 0, "LP24" }, { 1, "LP12" }, { 2, "BP" }, { 4, "Comb" } })
+        {
+            auto rig = rigFor (click);
+            rig->fp.set ("flt_type", (float) type);
+            rig->fp.set ("flt_cutoff", 440);
+            rig->fp.set ("flt_reso", 100);
+            rig->on (60); rig->run (1.5);
+            const auto hz = rig->hz (1.0, 1.5);
+            const auto amp = rig->out.getMagnitude (0, (int) (1.0 * hostRate), (int) (0.5 * hostRate));
+            check (amp > 0.1f && amp < 1.6f && near (hz, 440, 440 * 0.06),
+                   juce::String (name) + " self-oscillates at full resonance (" + juce::String (hz, 0) + " Hz, peak " + juce::String (amp, 2) + ")");
+        }
+        {
+            auto rig = rigFor (click);
+            rig->fp.set ("flt_type", 0);
+            rig->fp.set ("flt_cutoff", 440);
+            rig->fp.set ("flt_reso", 60);
+            rig->on (60); rig->run (1.0);
+            check (rig->rms (0.6, 1.0) < 1e-4f, "below about 90 % it rings out instead (LP24, 60 %)");
+        }
+
+        // Smooth sweeps: jumping the cutoff between blocks glides instead of stepping
+        {
+            auto rig = rigFor (s200);
+            rig->fp.set ("flt_type", 0);
+            rig->fp.set ("flt_reso", 50);
+            rig->on (60);
+            juce::AudioBuffer<float> all (2, (int) hostRate);
+            for (int b = 0; b < (int) hostRate / blockSize; ++b)
+            {
+                rig->fp.set ("flt_cutoff", (b / 8) % 2 ? 300.0f : 3000.0f);   // a square wave on the cutoff
+                rig->run ((double) blockSize / hostRate);
+                for (int ch = 0; ch < 2; ++ch)
+                    all.copyFrom (ch, b * blockSize, rig->out, ch, 0, blockSize);
+            }
+            float maxStep = 0;
+            for (int i = (int) (0.05 * hostRate); i < all.getNumSamples() - blockSize; ++i)
+                maxStep = juce::jmax (maxStep, std::abs (all.getSample (0, i) - all.getSample (0, i - 1)));
+            check (maxStep < 0.08f, "cutoff jumps of 3 octaves don't click (largest step " + juce::String (maxStep, 3) + ")");
+        }
 
         auto crest = [&] (float driveDb)
         {
@@ -439,6 +508,191 @@ int main()
         rig.on (60); rig.run (0.2);
         const auto l = rig.rms (0.02, 0.06, 0), r = rig.rms (0.02, 0.06, 1);
         check (l > 0.9f * r, "LFO fade-in: the pan barely moves in the first 60 ms of a 2 s fade");
+    }
+
+    std::cout << "Modulation matrix" << std::endl;
+    {
+        const auto plain = juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]";
+        auto withRoutes = [&] (const juce::String& routes) { return instrument ({ layer (plain) }, ",\"modRoutes\":" + routes); };
+
+        Rig vib (withRoutes (R"([{ "source": "lfo1", "target": "pitch", "amount": 50 }])"));
+        vib.fp.set ("lfo1_shape", 3);   // square
+        vib.fp.set ("lfo1_depth", 100);
+        vib.fp.set ("lfo1_rate", 2);
+        vib.on (60); vib.run (0.5);
+        check (near (vib.hz (0.03, 0.24), 400, 6) && near (vib.hz (0.28, 0.49), 100, 3),
+               "LFO 1 -> Pitch 50 %: a square LFO jumps an octave up, then down (" + juce::String (vib.hz (0.03, 0.24), 0) + " / " + juce::String (vib.hz (0.28, 0.49), 0) + " Hz)");
+
+        Rig none (withRoutes ("[]"));
+        none.fp.set ("lfo2_shape", 3);
+        none.fp.set ("lfo2_depth", 100);
+        none.on (60); none.run (0.4);
+        check (std::abs (none.rms (0.05, 0.4, 0) - none.rms (0.05, 0.4, 1)) < 1e-3f, "with no routes, LFO 2 no longer pans (the old fixed routing is gone)");
+
+        Rig dflt (instrument ({ layer (plain) }));
+        dflt.fp.set ("lfo2_shape", 3);
+        dflt.fp.set ("lfo2_depth", 100);
+        dflt.on (60); dflt.run (0.4);
+        check (dflt.rms (0.05, 0.4, 0) < 1e-3f, "an instrument without \"modRoutes\" gets the default routing (LFO 2 -> Pan)");
+
+        const auto s2000m = sine (dir, "m2000.wav", 2000.0);
+        Rig macro (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s2000m) + "]") },
+                              R"(,"modRoutes":[{ "source": "macro1", "target": "param:flt_cutoff", "amount": -100 }])"));
+        macro.fp.set ("flt_type", 0);
+        macro.on (60); macro.run (0.3);
+        const auto openLevel = macro.rms (0.1, 0.3);
+        macro.fp.set ("macro1", 100);
+        macro.run (0.3);
+        const auto closedLevel = macro.rms (0.1, 0.3);
+        check (juce::Decibels::gainToDecibels (closedLevel / openLevel) < -40, "Macro 1 -> param:flt_cutoff -100 %: turning the macro up closes the filter ("
+               + juce::String (juce::Decibels::gainToDecibels (closedLevel / openLevel), 0) + " dB)");
+        check (macro.engine->param (macro.engine->indexOf ("flt_cutoff")) < 25.0f, "and param() reports the modulated cutoff");
+
+        Rig vel (withRoutes (R"([{ "source": "velocity", "target": "volume", "amount": -50 }])"));
+        vel.on (60, 1); vel.run (0.2);
+        const auto soft = vel.rms (0.05, 0.2);
+        vel.off (60); vel.run (0.1);
+        vel.on (60, 127); vel.run (0.2);
+        const auto hard = vel.rms (0.05, 0.2);
+        check (near (hard / soft, 0.5, 0.03), "Velocity -> Volume -50 %: hard notes play at half level (" + juce::String (hard / soft, 2) + "×)");
+
+        Rig wheel (withRoutes (R"([{ "source": "modwheel", "target": "pitch", "amount": 50 }])"));
+        wheel.on (60);
+        wheel.pendingMidi.addEvent (juce::MidiMessage::controllerEvent (1, 1, 127), 0);
+        wheel.run (0.3);
+        check (near (wheel.hz (0.1, 0.29), 400, 6), "Mod wheel -> Pitch 50 %: full wheel = +12 st (" + juce::String (wheel.hz (0.1, 0.29), 0) + " Hz)");
+    }
+
+    std::cout << "FX chain" << std::endl;
+    {
+        const auto click = writeWav (dir, "fxclick.wav", hostRate, (int) hostRate, [] (int i) { return i < 96 ? 0.5f : 0.0f; });
+        const auto inst = instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (click) + "]") });
+        auto energy = [] (const Rig& r, double a, double b) { return r.rms (a, b); };
+
+        Rig delay (inst);
+        delay.fp.set ("fx_delay_on", 1);
+        delay.fp.set ("fx_delay_time", 100);
+        delay.fp.set ("fx_delay_fb", 0);
+        delay.fp.set ("fx_delay_mix", 50);
+        delay.fp.set ("fx_delay_pingpong", 0);
+        delay.fp.set ("fx_delay_tone", 20000);
+        delay.fx->reset();
+        delay.on (60); delay.run (0.3);
+        check (energy (delay, 0.05, 0.09) < 1e-4f && energy (delay, 0.098, 0.108) > 0.01f, "delay 100 ms: one echo at 100 ms and silence before it");
+
+        Rig synced (inst);
+        synced.fp.set ("fx_delay_on", 1);
+        synced.fp.set ("fx_delay_sync", 1);
+        synced.fp.set ("fx_delay_div", 8);   // 1/4
+        synced.fp.set ("fx_delay_fb", 0);
+        synced.fp.set ("fx_delay_mix", 50);
+        synced.fp.set ("fx_delay_pingpong", 0);
+        synced.fx->reset();
+        synced.on (60); synced.run (0.7);
+        check (energy (synced, 0.3, 0.49) < 1e-4f && energy (synced, 0.498, 0.51) > 0.01f, "synced 1/4 at 120 BPM echoes at 500 ms");
+
+        Rig reverb (inst);
+        reverb.fp.set ("fx_reverb_on", 1);
+        reverb.fp.set ("fx_reverb_mix", 50);
+        reverb.fx->reset();
+        reverb.on (60); reverb.run (1.0);
+        check (energy (reverb, 0.3, 0.6) > 1e-4f, "reverb leaves a tail after a click");
+
+        Rig order (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (click) + "]") },
+                              R"(,"fxOrder":["reverb","delay","chorus","crush","sat"])"));
+        order.run (0.01);
+        check ((order.engine->fxOrder() == std::array<int, 5> { 4, 3, 2, 1, 0 }), "the FX order comes from the instrument (\"fxOrder\")");
+
+        Rig partial (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (click) + "]") },
+                                R"(,"fxOrder":["delay","bogus","delay"])"));
+        partial.run (0.01);
+        check ((partial.engine->fxOrder() == std::array<int, 5> { 3, 0, 1, 2, 4 }), "a partial or broken order keeps every effect once");
+
+        Rig crush (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") }));
+        crush.fp.set ("fx_crush_on", 1);
+        crush.fp.set ("fx_crush_bits", 2);
+        crush.fx->reset();
+        crush.on (60); crush.run (0.3);
+        juce::SortedSet<int> levels;
+        for (int i = (int) (0.1 * hostRate); i < (int) (0.3 * hostRate); ++i)
+            levels.add (juce::roundToInt (crush.out.getSample (0, i) * 1000));
+        check (levels.size() <= 4, "a 2-bit crush leaves only a few output levels (" + juce::String (levels.size()) + ")");
+    }
+
+    std::cout << "Outputs and normalize" << std::endl;
+    {
+        Rig bus (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,\"output\":\"Bus 2\",") + base + ",\"samples\":[" + path (s200) + "]") }));
+        juce::AudioBuffer<float> main (2, blockSize), b2 (2, blockSize);
+        juce::AudioBuffer<float>* aux[SamplerEngine::numAuxOutputs] { &b2, nullptr, nullptr };
+        bus.on (60);
+        float mainLevel = 0, auxLevel = 0;
+        for (int i = 0; i < 20; ++i)
+        {
+            main.clear(); b2.clear();
+            bus.engine->process (main, aux, bus.pendingMidi, false);
+            bus.pendingMidi.clear();
+            mainLevel = juce::jmax (mainLevel, main.getMagnitude (0, blockSize));
+            auxLevel = juce::jmax (auxLevel, b2.getMagnitude (0, blockSize));
+        }
+        check (mainLevel < 1e-5f && auxLevel > 0.1f, "a layer routed to Bus 2 plays there when the host has Bus 2 on");
+        bus.run (0.1);
+        check (bus.rms (0.0, 0.1) > 0.1f, "and falls back to the main output when it's off");
+
+        Rig norm (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,\"normalize\":true,") + base + ",\"samples\":[" + path (s200) + "]") }));
+        Rig plainRig (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") }));
+        norm.on (60); norm.run (0.2);
+        plainRig.on (60); plainRig.run (0.2);
+        check (near (norm.rms (0.05, 0.2) / plainRig.rms (0.05, 0.2), 2.0, 0.1), "normalize lifts a sample peaking at 0.5 by 6 dB (non-destructive)");
+    }
+
+    std::cout << "Sample tools" << std::endl;
+    {
+        const auto a = SampleTools::parseName ("Piano_C#3_mf_rr2.wav");
+        check (a.note == 61 && a.dynamic == 4 && a.rr == 2, "parses Piano_C#3_mf_rr2.wav as C#3 (61), mf, rr2");
+        const auto b = SampleTools::parseName ("My_Guitar_Ds2_f_rr1.wav");
+        check (b.note == 51 && b.dynamic == 5 && b.rr == 1, "parses the Create page's names (Ds2 = D#2 = 51, f, rr1)");
+        const auto c = SampleTools::parseName ("Bb1-v100.aif");
+        check (c.note == 46 && c.dynamic == 200, "parses Bb1 and an explicit v100");
+        check (SampleTools::parseName ("Kick_01.wav").note == -1 && SampleTools::parseName ("Bass_Long.wav").note == -1, "finds no note in Kick_01 or Bass_Long");
+
+        const auto audio = SampleTools::read (s200);
+        const auto hz = SampleTools::detectPitchHz (audio.buffer, audio.sampleRate);
+        check (near (hz, 200, 1), "detects the pitch of a 200 Hz sine (" + juce::String (hz, 2) + " Hz)");
+        const auto aSharp = SampleTools::read (sine (dir, "yin.wav", 466.16));
+        check (near (69 + 12 * std::log2 (SampleTools::detectPitchHz (aSharp.buffer, aSharp.sampleRate) / 440.0), 70, 0.05), "and of A#3 (466 Hz)");
+
+        const int z = SampleTools::nearestZeroCrossing (audio.buffer, 1000);
+        const auto* wave = audio.buffer.getReadPointer (0);
+        check (std::abs (wave[z]) < 0.01f || (wave[z - 1] < 0) != (wave[z] < 0), "finds a zero crossing near a position");
+
+        auto inst = juce::JSON::parse (R"({ "layers": [
+            { "id": 1, "group": "P", "samples": ["Piano_C2_mf.wav"], "root": 0, "lo": 0, "hi": 0, "vlo": 0, "vhi": 127 },
+            { "id": 2, "group": "P", "samples": ["Piano_C4_mf.wav"], "root": 0, "lo": 0, "hi": 0, "vlo": 0, "vhi": 127 },
+            { "id": 3, "group": "P", "samples": ["Piano_C3_mf.wav"], "root": 0, "lo": 0, "hi": 0, "vlo": 0, "vhi": 127 } ] })");
+        SampleTools::autoMap (inst);
+        auto L = [&inst] (int i, const char* k) { return (int) inst["layers"][i][k]; };
+        check (L (0, "root") == 48 && L (2, "root") == 60 && L (1, "root") == 72
+                 && L (0, "hi") + 1 == L (2, "lo") && L (2, "hi") + 1 == L (1, "lo"),
+               "auto-map sets roots from names and joins the key ranges (" + juce::String (L (0, "lo")) + "–" + juce::String (L (0, "hi")) + ", "
+                   + juce::String (L (2, "lo")) + "–" + juce::String (L (2, "hi")) + ", " + juce::String (L (1, "lo")) + "–" + juce::String (L (1, "hi")) + ")");
+
+        auto gaps = juce::JSON::parse (R"({ "layers": [
+            { "id": 1, "group": "G", "root": 38, "lo": 36, "hi": 40, "vlo": 0, "vhi": 127 },
+            { "id": 2, "group": "G", "root": 52, "lo": 50, "hi": 55, "vlo": 0, "vhi": 127 } ] })");
+        SampleTools::fillGaps (gaps);
+        check ((int) gaps["layers"][0]["hi"] + 1 == (int) gaps["layers"][1]["lo"], "fill gaps closes the space between two zones");
+
+        juce::Array<juce::File> files;
+        for (auto n : { "Str_C3_pp.wav", "Str_C3_ff.wav", "Str_C3_ff_rr2.wav", "Str_E3_pp.wav", "Str_E3_ff.wav" })
+            files.add (sine (dir, n, 200, 0.05));
+        auto imported = juce::JSON::parse (R"({ "layers": [] })");
+        const auto message = SampleTools::importFiles (imported, files, "Strings");
+        const auto* ls = imported["layers"].getArray();
+        int rrLayer = -1;
+        for (int i = 0; i < ls->size(); ++i)
+            if ((*ls)[i]["samples"].size() == 2) rrLayer = i;
+        check (ls->size() == 4 && rrLayer >= 0 && (int) (*ls)[rrLayer]["vlo"] == 64 && (*ls)[rrLayer]["rrMode"].toString() == "cycle",
+               "import makes one layer per note and dynamic, with round robins and velocity tiers (" + message + ")");
     }
 
     std::cout << "Missing files and instrument edits" << std::endl;

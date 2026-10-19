@@ -129,6 +129,7 @@ SamplePtr SampleCache::load (const juce::File& file)
     s->audio.setSize (channels, length);
     reader->read (&s->audio, 0, length, 0, true, channels > 1);
     s->sampleRate = reader->sampleRate;
+    s->peak = juce::jmax (1.0e-6f, s->audio.getMagnitude (0, length));
     s->path = file.getFullPathName();
     return s;
 }
@@ -146,6 +147,7 @@ SamplePtr SampleCache::missingTone (int rootNote)
     s->audio.setSize (1, length);
     s->sampleRate = sr;
     s->missing = true;
+    s->peak = 0.25f;
     const auto delta = juce::MathConstants<double>::twoPi * juce::MidiMessage::getMidiNoteInHertz (rootNote) / sr;
     auto* d = s->audio.getWritePointer (0);
     for (int i = 0; i < length; ++i)
@@ -186,7 +188,58 @@ void SampleCache::prune()
 }
 
 // ---------------- building a map ----------------
-std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, SampleCache& cache)
+juce::var defaultModRoutes()
+{
+    // The fixed destinations the UI used to show, plus a starting point for the macros.
+    return juce::JSON::parse (R"([
+        { "source": "env3",   "target": "grain_size",     "amount": 50 },
+        { "source": "lfo1",   "target": "grain_pos",      "amount": 50 },
+        { "source": "lfo2",   "target": "pan",            "amount": 100 },
+        { "source": "lfo3",   "target": "cutoff",         "amount": 50 },
+        { "source": "lfo4",   "target": "grain_spray",    "amount": 100 },
+        { "source": "macro1", "target": "grain_density",  "amount": 40 },
+        { "source": "macro1", "target": "grain_spray",    "amount": 30 },
+        { "source": "macro2", "target": "param:lfo1_rate",  "amount": 30 },
+        { "source": "macro2", "target": "param:lfo1_depth", "amount": 40 },
+        { "source": "macro3", "target": "param:fx_reverb_mix", "amount": 30 },
+        { "source": "macro3", "target": "param:fx_delay_mix",  "amount": 20 },
+        { "source": "macro4", "target": "drive",          "amount": 40 },
+        { "source": "macro4", "target": "param:fx_sat_drive", "amount": 40 }
+    ])");
+}
+
+static void parseRoutes (const juce::var& list, const juce::StringArray& paramIds, std::vector<ModRoute>& out)
+{
+    const auto* routes = list.getArray();
+    if (routes == nullptr)
+        return;
+    for (const auto& r : *routes)
+    {
+        ModRoute route;
+        const auto src = r["source"].toString();
+        route.source = -1;
+        for (int i = 0; i < Mod::numSources; ++i)
+            if (src == Mod::sourceIds[i])
+                route.source = i;
+        const auto target = r["target"].toString();
+        if (target.startsWith ("param:"))
+        {
+            // Parameter targets only make sense for sources that are the same for every voice.
+            route.param = paramIds.indexOf (target.substring (6));
+            if (! Mod::isGlobal (route.source))
+                route.param = -1;
+        }
+        else
+            for (int i = 0; i < Mod::numTargets; ++i)
+                if (target == Mod::targetIds[i])
+                    route.target = i;
+        route.amount = (float) juce::jlimit (-1.0, 1.0, numOr (r["amount"], 0) / 100.0);
+        if (route.source >= 0 && (route.target >= 0 || route.param >= 0) && route.amount != 0.0f)
+            out.push_back (route);
+    }
+}
+
+std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, SampleCache& cache, const juce::StringArray& paramIds)
 {
     auto map = std::make_unique<InstrumentMap>();
     map->keyswitchArticulation.fill (-1);
@@ -194,6 +247,22 @@ std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, Sample
     map->velocityCurve = pick (json["velocityCurve"], { { "linear", InstrumentMap::Curve::linear }, { "soft", InstrumentMap::Curve::soft },
                                                         { "hard", InstrumentMap::Curve::hard }, { "fixed", InstrumentMap::Curve::fixed } },
                                InstrumentMap::Curve::linear);
+
+    parseRoutes (json.hasProperty ("modRoutes") ? json["modRoutes"] : defaultModRoutes(), paramIds, map->routes);
+
+    if (const auto* order = json["fxOrder"].getArray())
+    {
+        // Keep any valid order; effects missing from the list keep their place at the end.
+        std::vector<int> seen;
+        for (const auto& id : *order)
+            for (int i = 0; i < 5; ++i)
+                if (id.toString() == fxIds[i] && std::find (seen.begin(), seen.end(), i) == seen.end())
+                    seen.push_back (i);
+        for (int i = 0; i < 5; ++i)
+            if (std::find (seen.begin(), seen.end(), i) == seen.end())
+                seen.push_back (i);
+        std::copy (seen.begin(), seen.end(), map->fxOrder.begin());
+    }
 
     const auto folderText = json["sampleFolder"].toString();
     const auto extraFolder = juce::File::isAbsolutePath (folderText) ? juce::File (folderText) : juce::File();
@@ -259,6 +328,14 @@ std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, Sample
 
         for (const auto& s : layer.samples)
             ++(s->missing ? map->missingSamples : map->loadedSamples);
+
+        if ((bool) l["normalize"])
+        {
+            float peak = 0;
+            for (const auto& smp : layer.samples)
+                peak = juce::jmax (peak, smp->peak);
+            layer.normalizeGain = peak > 0 ? juce::jmin (1000.0f, 1.0f / peak) : 1.0f;
+        }
 
         auto& groupSize = map->rrGroupSizes[(size_t) layer.rrGroup];
         groupSize = juce::jmax (groupSize, (int) layer.samples.size());

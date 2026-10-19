@@ -23,6 +23,21 @@ private:
     juce::WebBrowserComponent::Options buildOptions();
     std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
     juce::var handleCommand (const juce::String& name, const juce::Array<juce::var>& args);
+    bool handleAsyncCommand (const juce::String& name, const juce::Array<juce::var>& args,
+                             juce::WebBrowserComponent::NativeFunctionCompletion& done);
+    void emitPreset();
+    void pollLearn();
+
+    // "Learn key range": waiting for two notes
+    struct Learn
+    {
+        bool active = false;
+        juce::var layerId;
+        juce::Array<int> notes;
+        juce::uint32 deadline = 0;
+        juce::WebBrowserComponent::NativeFunctionCompletion done;
+    } learn;
+    std::unique_ptr<juce::FileChooser> importChooser;
 
     MtyaSamplerProcessor& proc;
     std::unique_ptr<juce::FileChooser> folderChooser;
