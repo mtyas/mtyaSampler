@@ -110,7 +110,16 @@ How the engine reads the layer fields:
 - **Keyswitch:** a layer with a keyswitch only plays while that keyswitch (or another with the same articulation) was the last one pressed; the lowest one is active at first. Keyswitch notes make no sound. Layers with −1 always play.
 - `output` is read but everything plays on Main until multi-out is added.
 
-Playback modes (`play_mode`, global): **One-shot** plays Start→End once, stopping early on key-up via the amp envelope. **Loop** plays into the loop and repeats Loop Start→Loop End with an equal-power crossfade (`loop_xfade`, limited by the audio before the loop start). **Ping-pong** bounces between the loop points. **Slice** splits Start→End into 16; the key's distance from the root picks the slice (root = slice 1), played at its own pitch. **Granular** sprays grains (`grn_size`, `grn_density`, `grn_spray`, `grn_pitchrnd`) around a position that starts at `grn_pos` and moves at normal speed, or stays at `grn_pos` while Freeze is on. Release samples always play as one-shots. The amp envelope is Env 1; pitch bend is ±2 st; the sustain pedal (CC 64) holds notes.
+Playback modes (`play_mode`, global): **One-shot** plays Start→End once, stopping early on key-up via the amp envelope. **Loop** plays into the loop and repeats Loop Start→Loop End with an equal-power crossfade (`loop_xfade`, limited by the audio before the loop start). **Ping-pong** bounces between the loop points. **Slice** splits Start→End into 16; the key's distance from the root picks the slice (root = slice 1), played at its own pitch. **Granular** sprays grains (`grn_size`, `grn_density`, `grn_spray`, `grn_pitchrnd`) around a position that starts at `grn_pos` and moves at normal speed, or stays at `grn_pos` while Freeze is on. Release samples always play as one-shots. Pitch bend is ±2 st; the sustain pedal (CC 64) holds notes.
+
+Sound design (per voice, in this order: sample → drive → filter → LFO 2 pan → Env 1 amp):
+
+- **Drive** (`flt_drive`): tanh soft clipping that keeps quiet signals at the same level and squares off loud ones; it fades in over the first 3 dB, and 0 dB is clean.
+- **Filter** (`flt_type`): LP24 (a resonant 12 dB stage plus a plain one), LP12, BP (unity at the centre), HP, all TPT state-variable filters with Q = 0.707 + Reso × 9 like the UI curve. **Comb** is a feedback comb with peaks at the cutoff and its multiples, feedback 0.2 + Reso × 0.75 (max 0.95), level-normalised at the peaks.
+- **Cutoff modulation:** Env 2 × Env Amt moves it up to ±6 octaves; LFO 3 at 100 % depth moves it ±3 octaves.
+- **Envelopes:** Env 1 = amp, Env 2 = filter, Env 3 → grain size (×0.5 at 0, ×1 at half, ×2 at full).
+- **LFOs** run per voice from the note start (Phase sets where they begin; Fade In ramps the depth from zero). Shapes match the display: sine, triangle, saw (falling), square, S&H (new random value each cycle). Destinations: LFO 1 → grain position (± half the region), LFO 2 → pan (balance), LFO 3 → cutoff, LFO 4 → grain spray (adds to Spray).
+- Filter and modulation update every 32 samples.
 
 ## Parameters (from ui/params.json)
 

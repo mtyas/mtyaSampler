@@ -57,7 +57,7 @@ namespace
             slot = std::make_unique<std::atomic<float>> (v);
             return slot.get();
         }
-        void set (const char* id, float v) { values[id]->store (v); }
+        void set (const char* id, float v) { jassert (values.count (id) > 0); values[id]->store (v); }
 
         SamplerEngine::Params make()
         {
@@ -73,6 +73,18 @@ namespace
             p.grnPitchRnd = self ("grn_pitchrnd", 0); p.grnFreeze = self ("grn_freeze", 0);
             p.attack = self ("env1_attack", 0.001f); p.decay = self ("env1_decay", 0.1f);
             p.sustain = self ("env1_sustain", 100); p.release = self ("env1_release", 0.01f);
+            // Filter wide open and no modulation, so the sampler checks hear the raw samples
+            p.fltType = self ("flt_type", 1);       p.fltCutoff = self ("flt_cutoff", 20000);
+            p.fltReso = self ("flt_reso", 0);       p.fltDrive = self ("flt_drive", 0);
+            p.fltEnvAmt = self ("flt_envamt", 0);
+            p.env2 = { self ("env2_attack", 0.001f), self ("env2_decay", 0.1f), self ("env2_sustain", 100), self ("env2_release", 0.01f) };
+            p.env3 = { self ("env3_attack", 0.001f), self ("env3_decay", 0.1f), self ("env3_sustain", 50), self ("env3_release", 0.01f) };
+            for (int i = 0; i < 4; ++i)
+            {
+                const auto pre = "lfo" + juce::String (i + 1) + "_";
+                auto q = [&] (const char* name, float v) { return self ((pre + name).toRawUTF8(), v); };
+                p.lfo[(size_t) i] = { q ("shape", 0), q ("rate", 1), q ("depth", 0), q ("phase", 0), q ("fade", 0) };
+            }
             return p;
         }
     };
@@ -358,6 +370,75 @@ int main()
         grain.on (60); grain.run (2.0);
         check (grain.rms (1.5, 2.0) > 0.05f && grain.engine->getActiveVoices() == 1, "granular + freeze keeps a cloud going on one voice");
         check (near (grain.hz (0.5, 2.0), 300, 15), "grains keep the note's pitch with no pitch randomness (" + juce::String (grain.hz (0.5, 2.0), 1) + " Hz)");
+    }
+
+    std::cout << "Filter" << std::endl;
+    {
+        const auto s4000 = sine (dir, "s4000.wav", 4000.0);
+        const auto s2000 = sine (dir, "s2000.wav", 2000.0);
+        const auto s750 = sine (dir, "s750.wav", 750.0);
+        auto rigFor = [&] (const juce::File& f) { return std::make_unique<Rig> (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (f) + "]") })); };
+        auto level = [&] (const juce::File& f, std::function<void (FakeParams&)> setup)
+        {
+            auto rig = rigFor (f);
+            setup (rig->fp);
+            rig->on (60); rig->run (0.3);
+            return juce::Decibels::gainToDecibels (rig->rms (0.1, 0.3));
+        };
+        const auto open4k = level (s4000, [] (FakeParams&) {});
+        const auto lp24 = level (s4000, [] (FakeParams& f) { f.set ("flt_type", 0); f.set ("flt_cutoff", 500); }) - open4k;
+        const auto lp12 = level (s4000, [] (FakeParams& f) { f.set ("flt_type", 1); f.set ("flt_cutoff", 500); }) - open4k;
+        // Theory says 72 / 36 dB; LP24 bottoms out near -60 dB because the Hermite resampling
+        // (44.1 kHz file at 48 kHz) leaves faint images around that level.
+        check (lp24 < -55 && lp12 < -30 && lp12 > -45 && lp24 < lp12 - 15,
+               "LP24 / LP12 at 500 Hz cut 4 kHz hard / by about 36 dB (" + juce::String (lp24, 1) + " / " + juce::String (lp12, 1) + " dB)");
+
+        const auto open200 = level (s200, [] (FakeParams&) {});
+        const auto hp = level (s200, [] (FakeParams& f) { f.set ("flt_type", 3); f.set ("flt_cutoff", 4000); }) - open200;
+        check (hp < -40, "HP at 4 kHz cuts 200 Hz (" + juce::String (hp, 1) + " dB)");
+
+        const auto open2k = level (s2000, [] (FakeParams&) {});
+        const auto bpPeak = level (s2000, [] (FakeParams& f) { f.set ("flt_type", 2); f.set ("flt_cutoff", 2000); f.set ("flt_reso", 50); }) - open2k;
+        const auto bpOff = level (s200, [] (FakeParams& f) { f.set ("flt_type", 2); f.set ("flt_cutoff", 2000); f.set ("flt_reso", 50); }) - open200;
+        check (std::abs (bpPeak) < 1.0f && bpOff < -30, "BP passes its centre at unity and cuts far below it (" + juce::String (bpPeak, 1) + " / " + juce::String (bpOff, 1) + " dB)");
+
+        const auto shut = level (s2000, [] (FakeParams& f) { f.set ("flt_type", 0); f.set ("flt_cutoff", 200); }) - open2k;
+        const auto envOpen = level (s2000, [] (FakeParams& f) { f.set ("flt_type", 0); f.set ("flt_cutoff", 200); f.set ("flt_envamt", 100); f.set ("env2_sustain", 100); }) - open2k;
+        check (shut < -30 && envOpen > -1, "Env 2 at full Env Amt opens a 200 Hz LP24 (2 kHz: " + juce::String (shut, 1) + " dB → " + juce::String (envOpen, 1) + " dB)");
+
+        const auto open500 = level (s500, [] (FakeParams&) {});
+        const auto open750 = level (s750, [] (FakeParams&) {});
+        const auto combPeak = level (s500, [] (FakeParams& f) { f.set ("flt_type", 4); f.set ("flt_cutoff", 500); f.set ("flt_reso", 100); }) - open500;
+        const auto combNotch = level (s750, [] (FakeParams& f) { f.set ("flt_type", 4); f.set ("flt_cutoff", 500); f.set ("flt_reso", 100); }) - open750;
+        check (std::abs (combPeak) < 1.5f && combNotch < -20, "comb at 500 Hz: peak at 500, notch at 750 (" + juce::String (combPeak, 1) + " / " + juce::String (combNotch, 1) + " dB)");
+
+        auto crest = [&] (float driveDb)
+        {
+            auto rig = rigFor (s200);
+            rig->fp.set ("flt_drive", driveDb);
+            rig->on (60); rig->run (0.3);
+            const int a = (int) (0.1 * hostRate);
+            return rig->out.getMagnitude (0, a, (int) (0.2 * hostRate)) / rig->rms (0.1, 0.3);
+        };
+        check (crest (24) < crest (0) * 0.85f, "drive squares off the wave (crest factor " + juce::String (crest (0), 2) + " → " + juce::String (crest (24), 2) + ")");
+    }
+
+    std::cout << "LFOs and envelopes" << std::endl;
+    {
+        Rig rig (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") }));
+        rig.fp.set ("lfo2_shape", 3);   // square: +1 for the first half cycle
+        rig.fp.set ("lfo2_depth", 100);
+        rig.fp.set ("lfo2_rate", 1);
+        rig.on (60); rig.run (1.0);
+        check (rig.rms (0.05, 0.45, 0) < 1e-3f && rig.rms (0.05, 0.45, 1) > 0.2f
+                 && rig.rms (0.55, 0.95, 1) < 1e-3f && rig.rms (0.55, 0.95, 0) > 0.2f,
+               "LFO 2 (square, 1 Hz) pans hard right, then hard left");
+        rig.off (60); rig.run (0.1);
+
+        rig.fp.set ("lfo2_fade", 2000);
+        rig.on (60); rig.run (0.2);
+        const auto l = rig.rms (0.02, 0.06, 0), r = rig.rms (0.02, 0.06, 1);
+        check (l > 0.9f * r, "LFO fade-in: the pan barely moves in the first 60 ms of a 2 s fade");
     }
 
     std::cout << "Missing files and instrument edits" << std::endl;

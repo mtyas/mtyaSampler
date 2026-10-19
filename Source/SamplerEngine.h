@@ -2,7 +2,8 @@
 #include "InstrumentMap.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 
-// The sampler: voices, round robin, trigger modes, voice modes and the playback modes.
+// The sampler: voices, round robin, trigger modes, voice modes, the playback modes, and per-voice
+// sound design (drive + filter, three envelopes, four LFOs with fixed destinations).
 // Everything in process() runs on the audio thread: no allocation, locks or file I/O.
 //
 // Instrument changes arrive as a ready-built InstrumentMap through publish() (any thread).
@@ -33,6 +34,15 @@ public:
         std::atomic<float>* sustain = nullptr;    // %
         std::atomic<float>* release = nullptr;
 
+        std::atomic<float>* fltType = nullptr;    // 0 LP24, 1 LP12, 2 BP, 3 HP, 4 Comb
+        std::atomic<float>* fltCutoff = nullptr;  // Hz
+        std::atomic<float>* fltReso = nullptr;    // %
+        std::atomic<float>* fltDrive = nullptr;   // dB
+        std::atomic<float>* fltEnvAmt = nullptr;  // %, bipolar: Env 2 → cutoff
+        std::array<std::atomic<float>*, 4> env2 {}, env3 {};   // attack, decay, sustain, release
+        struct Lfo { std::atomic<float>* shape = nullptr, *rate = nullptr, *depth = nullptr, *phase = nullptr, *fade = nullptr; };
+        std::array<Lfo, 4> lfo {};
+
         static Params fromApvts (juce::AudioProcessorValueTreeState&);
     };
 
@@ -40,6 +50,11 @@ public:
 
     static constexpr int maxVoices = 96;
     static constexpr int maxGrains = 32;
+
+    // Modulation ranges (fixed destinations, as shown in the UI)
+    static constexpr float envAmtOctaves = 6.0f;      // Env 2 at full Env Amt moves the cutoff ±6 octaves
+    static constexpr float lfoCutoffOctaves = 3.0f;   // LFO 3 → cutoff, at 100 % depth
+    static constexpr float lfoPosRange = 0.5f;        // LFO 1 → grain position, ± half the region
 
     explicit SamplerEngine (Params);
     ~SamplerEngine();
@@ -95,6 +110,21 @@ private:
         bool killing = false;            // fast fade-out (steal, choke, mono retrigger)
         float killGain = 1;
 
+        // sound design
+        juce::ADSR env2, env3;           // filter, mod
+        float env2Value = 0, env3Value = 0;
+        struct LfoState { double phase = 0; float value = 0, held = 0; } lfos[4];
+        double age = 0;                  // samples since the note started (LFO fade-in)
+        int samplesSinceMod = 0;
+        struct Svf { float ic1 = 0, ic2 = 0; } svf[2][2];   // [stage][channel]
+        float k1 = 1.414f, a11 = 0, a12 = 0, a13 = 0;       // stage 1 (resonant)
+        float a21 = 0, a22 = 0, a23 = 0;                    // stage 2 of LP24 (Q 0.707)
+        std::vector<float> comb;         // two channels back to back; sized in prepare()
+        int combWrite = 0;
+        float combDelay = 1, combFeedback = 0;
+        float panModL = 1, panModR = 1;
+        float grainSizeMul = 1, grainSpray = 0, grainPosOffset = 0;
+
         // granular
         Grain grains[maxGrains];
         double grainHead = 0;            // source position the cloud is centred on
@@ -109,7 +139,11 @@ private:
         float tuneSemis = 0;             // tune + fine + pitch bend
         float grnPos = 0.5f, grnSizeMs = 80, grnDensity = 20, grnSpray = 0, grnPitchRnd = 0;
         bool grnFreeze = false;
-        juce::ADSR::Parameters env;
+        juce::ADSR::Parameters env, env2, env3;
+
+        int fltType = 1;
+        float cutoff = 20000, reso = 0, driveDb = 0, envAmt = 0;
+        struct Lfo { int shape = 0; float rate = 1, depth = 0, phase = 0, fadeMs = 0; } lfo[4];
     };
 
     void readBlockParams();
@@ -138,6 +172,8 @@ private:
     void updateRegion (Voice&) const;
     float read (const SampleData&, int channel, double pos) const noexcept;
     void triggerGrain (Voice&);
+    void updateModulation (Voice&);
+    void startModulation (Voice&);
 
     // ---- map handover ----
     void pickUpNewMap();
@@ -147,6 +183,7 @@ private:
     Params params;
     BlockParams bp;
     double sampleRate = 44100.0;
+    int combLength = 1;                               // per channel, for a 20 Hz comb at this rate
 
     InstrumentMap* map = nullptr;                     // audio thread's current map
     std::atomic<InstrumentMap*> pending { nullptr };

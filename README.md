@@ -6,7 +6,7 @@ A sampler instrument with sound-design tools (granular engine, filter, 3 envelop
 
 **Create your own samples:** the Create page is a recording assistant. You choose an instrument preset, note range, how often to sample (every note, every 3 notes…), round robins, velocity layers and the longest take. It then guides you note by note: it announces the note, plays a reference tone and counts you in, then records what you play into the plugin's input. Each take is trimmed, saved as a WAV and mapped straight into the Layers page.
 
-**Status:** the UI is complete and wired to every parameter. The sampler engine plays the layers: key/velocity mapping with crossfades, round robin, trigger modes, voice modes, keyswitches and all five playback modes (one-shot, loop, ping-pong, slice, granular). The filter, LFOs, FX and macros are next; see [CLAUDE.md](CLAUDE.md), *Roadmap*.
+**Status:** the UI is complete and wired to every parameter. The sampler engine plays the layers: key/velocity mapping with crossfades, round robin, trigger modes, voice modes, keyswitches all five playback modes (one-shot, loop, ping-pong, slice, granular), and the filter, three envelopes and four LFOs. The FX chain and macros are next; see [CLAUDE.md](CLAUDE.md), *Roadmap*.
 
 **Where samples are found:** a layer's `samples` can be full paths or bare file names. Bare names are looked up in the instrument's `sampleFolder` (if set), then anywhere under `Documents\mtyaSampler\Recordings` and `Documents\mtyaSampler\Samples`, so takes from the Create page are found automatically. A file that can't be found plays a quiet sine at the layer's root, so you can still check the mapping; the header's `missing` count says how many.
 

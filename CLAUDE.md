@@ -9,7 +9,7 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 - **Sampler engine (roadmap 2–3): done, not yet tried in a DAW.**
   - `Source/InstrumentMap.*`: instrument JSON → immutable zone map; `SampleCache` loads files into RAM and finds bare file names.
   - `Source/SampleLoader.*`: background thread that builds maps and deletes old ones.
-  - `Source/SamplerEngine.*`: voices, round robin, trigger modes, voice modes, keyswitches, the five playback modes, Env 1 as the amp envelope.
+  - `Source/SamplerEngine.*`: voices, round robin, trigger modes, voice modes, keyswitches, the five playback modes, plus per-voice drive, filter (LP24/LP12/BP/HP/Comb), Env 1–3 and the 4 LFOs on their fixed destinations (roadmap 4).
   - `tests/EngineTests.cpp` (`mtyaEngineTests` target): offline checks for all of the above. Run it after engine changes.
   - How each layer field and playback mode behaves is written down in `docs/ui-spec.md` (Instrument JSON).
 - **Create page (sample-recording assistant): done.**
@@ -80,7 +80,9 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
    - Voices: polyphony per layer, choke groups, steal modes, poly/mono/legato voice modes, glide, keyswitch/articulation filtering.
    - Pitch from `root` and `keyTrack`, plus the `tune` and `fine` parameters. Volume, pan and output bus per layer (multi-out comes later).
 3. **Playback modes: done.** (`play_mode`): one-shot, loop (with `loop_xfade`), ping-pong, slice (16 slices between start and end), and granular (the `grn_*` parameters; Freeze holds the position).
-4. **Sound design:**
+4. **Sound design: done**, with fixed destinations; the ranges are in `docs/ui-spec.md`. Left over: the mod-matrix page, and better interpolation than Hermite (it leaves images around −60 dB when transposing bright samples).
+
+   Original brief:
    - Filter types (`flt_type`): LP24, LP12, BP, HP, Comb. `juce::dsp::StateVariableTPTFilter` or `LadderFilter` cover LP/BP/HP; the comb is custom.
    - 3 ADSRs: Env 1 = amp, Env 2 = filter (`flt_envamt`), Env 3 = mod.
    - 4 LFOs: shape, rate, depth, phase, fade.

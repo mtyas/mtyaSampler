@@ -9,6 +9,31 @@ namespace
     constexpr float bendRangeSemis = 2.0f;
 
     float hann (float x) { return 0.5f - 0.5f * std::cos (juce::MathConstants<float>::twoPi * x); }
+
+    // LFO shapes, the same as the UI's display (ui/js/displays.js). u is the phase in 0..1.
+    float lfoShape (int shape, float u, float held)
+    {
+        switch (shape)
+        {
+            case 0:  return std::sin (u * juce::MathConstants<float>::twoPi);
+            case 1:  return u < 0.25f ? u * 4.0f : (u < 0.75f ? 2.0f - u * 4.0f : u * 4.0f - 4.0f);
+            case 2:  return 1.0f - 2.0f * u;
+            case 3:  return u < 0.5f ? 1.0f : -1.0f;
+            default: return held;   // sample & hold: a new random value every cycle
+        }
+    }
+
+    // One step of a TPT state-variable filter (Simper). Returns low-pass; band-pass goes to `band`.
+    struct SvfOut { float low, band; };
+    inline SvfOut svfStep (float& ic1, float& ic2, float v0, float a1, float a2, float a3)
+    {
+        const auto v3 = v0 - ic2;
+        const auto v1 = a1 * ic1 + a2 * v3;
+        const auto v2 = ic2 + a2 * ic1 + a3 * v3;
+        ic1 = 2.0f * v1 - ic1;
+        ic2 = 2.0f * v2 - ic2;
+        return { v2, v1 };
+    }
 }
 
 SamplerEngine::Params SamplerEngine::Params::fromApvts (juce::AudioProcessorValueTreeState& apvts)
@@ -28,6 +53,17 @@ SamplerEngine::Params SamplerEngine::Params::fromApvts (juce::AudioProcessorValu
     r.grnSpray = p ("grn_spray");       r.grnPitchRnd = p ("grn_pitchrnd"); r.grnFreeze = p ("grn_freeze");
     r.attack = p ("env1_attack");       r.decay = p ("env1_decay");
     r.sustain = p ("env1_sustain");     r.release = p ("env1_release");
+
+    r.fltType = p ("flt_type");         r.fltCutoff = p ("flt_cutoff");  r.fltReso = p ("flt_reso");
+    r.fltDrive = p ("flt_drive");       r.fltEnvAmt = p ("flt_envamt");
+    r.env2 = { p ("env2_attack"), p ("env2_decay"), p ("env2_sustain"), p ("env2_release") };
+    r.env3 = { p ("env3_attack"), p ("env3_decay"), p ("env3_sustain"), p ("env3_release") };
+    for (int i = 0; i < 4; ++i)
+    {
+        const auto pre = "lfo" + juce::String (i + 1) + "_";
+        auto q = [&] (const char* name) { return p ((pre + name).toRawUTF8()); };
+        r.lfo[(size_t) i] = { q ("shape"), q ("rate"), q ("depth"), q ("phase"), q ("fade") };
+    }
     return r;
 }
 
@@ -47,9 +83,13 @@ SamplerEngine::~SamplerEngine()
 void SamplerEngine::prepare (double newSampleRate)
 {
     sampleRate = newSampleRate;
+    combLength = (int) std::ceil (sampleRate / 20.0) + 4;   // the lowest cutoff is 20 Hz
     for (auto& v : voices)
+    {
         if (v.active)
             freeVoice (v);
+        v.comb.assign ((size_t) combLength * 2, 0.0f);
+    }
     keyOrder.fill (0);
     sustainedKey.fill (false);
     sustainPedal = false;
@@ -122,6 +162,21 @@ void SamplerEngine::readBlockParams()
     bp.grnPitchRnd = get (params.grnPitchRnd, 0);
     bp.grnFreeze   = get (params.grnFreeze, 0) >= 0.5f;
     bp.env = { get (params.attack, 0.005f), get (params.decay, 0.1f), get (params.sustain, 100) * 0.01f, get (params.release, 0.1f) };
+    bp.env2 = { get (params.env2[0], 0.005f), get (params.env2[1], 0.1f), get (params.env2[2], 100) * 0.01f, get (params.env2[3], 0.1f) };
+    bp.env3 = { get (params.env3[0], 0.005f), get (params.env3[1], 0.1f), get (params.env3[2], 100) * 0.01f, get (params.env3[3], 0.1f) };
+
+    // With no filter parameters (tests), the defaults leave the sound untouched.
+    bp.fltType = juce::jlimit (0, 4, juce::roundToInt (get (params.fltType, 1)));
+    bp.cutoff  = get (params.fltCutoff, 20000);
+    bp.reso    = juce::jlimit (0.0f, 1.0f, get (params.fltReso, 0) * 0.01f);
+    bp.driveDb = juce::jmax (0.0f, get (params.fltDrive, 0));
+    bp.envAmt  = get (params.fltEnvAmt, 0) * 0.01f;
+    for (size_t i = 0; i < 4; ++i)
+    {
+        const auto& l = params.lfo[i];
+        bp.lfo[i] = { juce::jlimit (0, 4, juce::roundToInt (get (l.shape, 0))), get (l.rate, 1), get (l.depth, 0) * 0.01f,
+                      get (l.phase, 0) / 360.0f, get (l.fade, 0) };
+    }
 }
 
 void SamplerEngine::process (juce::AudioBuffer<float>& out, const juce::MidiBuffer& midi, bool transportPlaying)
@@ -145,6 +200,8 @@ void SamplerEngine::process (juce::AudioBuffer<float>& out, const juce::MidiBuff
         if (v.active)
         {
             v.env.setParameters (bp.env);
+            v.env2.setParameters (bp.env2);
+            v.env3.setParameters (bp.env3);
             updateRegion (v);
         }
 
@@ -384,6 +441,8 @@ void SamplerEngine::releaseKey (int note)
 
         v.keyDown = false;
         v.env.noteOff();
+        v.env2.noteOff();
+        v.env3.noteOff();
     }
 
     // Release triggers: quieter the longer the key was held.
@@ -517,10 +576,13 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
     v.gainL = g * layer.panL;
     v.gainR = g * layer.panR;
 
-    v.env.setSampleRate (sampleRate);
-    v.env.setParameters (bp.env);
-    v.env.reset();
-    v.env.noteOn();
+    for (auto [env, p] : { std::pair { &v.env, &bp.env }, { &v.env2, &bp.env2 }, { &v.env3, &bp.env3 } })
+    {
+        env->setSampleRate (sampleRate);
+        env->setParameters (*p);
+        env->reset();
+        env->noteOn();
+    }
 
     updateRegion (v);
     v.pos = v.regionStart;
@@ -529,6 +591,7 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
     for (auto& gr : v.grains)
         gr.active = false;
 
+    startModulation (v);
     v.active = true;
     return vp;
 }
@@ -621,17 +684,86 @@ void SamplerEngine::triggerGrain (Voice& v)
         if (g.active)
             continue;
         const auto region = v.regionEnd - v.regionStart;
-        const auto spray = (double) bp.grnSpray * region * (random.nextDouble() - 0.5);
+        const auto spray = (double) v.grainSpray * region * (random.nextDouble() - 0.5);
         const auto pitch = bp.grnPitchRnd > 0 ? std::exp2 ((random.nextFloat() * 2.0f - 1.0f) * bp.grnPitchRnd / 12.0f) : 1.0f;
         g.inc = v.inc * pitch;
-        g.length = juce::jmax (8, (int) (bp.grnSizeMs * 0.001 * sampleRate));
-        // Centre the grain on the chosen position
-        g.pos = juce::jlimit (v.regionStart, v.regionEnd, v.grainHead + spray) - g.inc * g.length * 0.5;
+        g.length = juce::jmax (8, (int) (bp.grnSizeMs * v.grainSizeMul * 0.001 * sampleRate));
+        // Centre the grain on the chosen position (LFO 1 moves it)
+        const auto centre = v.grainHead + (double) v.grainPosOffset * region + spray;
+        g.pos = juce::jlimit (v.regionStart, v.regionEnd, centre) - g.inc * g.length * 0.5;
         g.pos = juce::jmax (0.0, g.pos);
         g.age = 0;
         g.active = true;
         return;
     }
+}
+
+void SamplerEngine::startModulation (Voice& v)
+{
+    v.env2Value = v.env3Value = 0;
+    v.age = 0;
+    v.samplesSinceMod = 0;
+    for (size_t i = 0; i < 4; ++i)
+        v.lfos[i] = { (double) bp.lfo[i].phase, 0.0f, random.nextFloat() * 2.0f - 1.0f };
+    for (auto& stage : v.svf)
+        for (auto& ch : stage)
+            ch = {};
+    if (bp.fltType == 4)
+        std::fill (v.comb.begin(), v.comb.end(), 0.0f);
+    v.combWrite = 0;
+    updateModulation (v);
+}
+
+void SamplerEngine::updateModulation (Voice& v)
+{
+    // LFOs: free-running per voice from the note start, with a fade-in
+    const auto elapsed = (double) v.samplesSinceMod;
+    v.samplesSinceMod = 0;
+    for (size_t i = 0; i < 4; ++i)
+    {
+        const auto& p = bp.lfo[i];
+        auto& st = v.lfos[i];
+        const auto before = st.phase;
+        st.phase += p.rate * elapsed / sampleRate;
+        if (std::floor (st.phase) != std::floor (before))
+            st.held = random.nextFloat() * 2.0f - 1.0f;
+        const auto u = (float) (st.phase - std::floor (st.phase));
+        const auto fade = p.fadeMs > 0 ? (float) juce::jmin (1.0, v.age / (p.fadeMs * 0.001 * sampleRate)) : 1.0f;
+        st.value = lfoShape (p.shape, u, st.held) * p.depth * fade;
+    }
+
+    // Cutoff: Env 2 through Env Amt, plus LFO 3
+    const auto octaves = v.env2Value * bp.envAmt * envAmtOctaves + v.lfos[2].value * lfoCutoffOctaves;
+    const auto fc = juce::jlimit (20.0f, (float) juce::jmin (20000.0, sampleRate * 0.45), bp.cutoff * std::exp2 (octaves));
+
+    if (bp.fltType == 4)
+    {
+        // Comb: peaks at the cutoff and its multiples; resonance is the feedback
+        v.combDelay = juce::jlimit (1.0f, (float) (combLength - 2), (float) (sampleRate / fc));
+        v.combFeedback = juce::jmin (0.95f, 0.2f + bp.reso * 0.75f);
+    }
+    else
+    {
+        // Same resonance → Q mapping as the UI's response curve
+        const auto q = 0.707f + bp.reso * 9.0f;
+        const auto g = (float) std::tan (juce::MathConstants<double>::pi * fc / sampleRate);
+        v.k1 = 1.0f / q;
+        v.a11 = 1.0f / (1.0f + g * (g + v.k1));
+        v.a12 = g * v.a11;
+        v.a13 = g * v.a12;
+        constexpr float k2 = 1.41421356f;
+        v.a21 = 1.0f / (1.0f + g * (g + k2));
+        v.a22 = g * v.a21;
+        v.a23 = g * v.a22;
+    }
+
+    // LFO 2 → pan (balance), LFO 1 → grain position, LFO 4 → spray, Env 3 → grain size (×0.5…×2, ×1 at half)
+    const auto pan = v.lfos[1].value;
+    v.panModL = juce::jmin (1.0f, 1.0f - pan);
+    v.panModR = juce::jmin (1.0f, 1.0f + pan);
+    v.grainPosOffset = v.lfos[0].value * lfoPosRange;
+    v.grainSpray = juce::jlimit (0.0f, 1.0f, bp.grnSpray + v.lfos[3].value);
+    v.grainSizeMul = std::exp2 (v.env3Value * 2.0f - 1.0f);
 }
 
 void SamplerEngine::renderVoice (Voice& v, juce::AudioBuffer<float>& out, int start, int num)
@@ -653,6 +785,11 @@ void SamplerEngine::renderVoice (Voice& v, juce::AudioBuffer<float>& out, int st
     const auto grainInterval = sampleRate / bp.grnDensity;
     const auto freezePos = v.regionStart + bp.grnPos * (v.regionEnd - v.regionStart);
 
+    // Drive: soft clipping that keeps quiet signals at the same level, blended in over the first 3 dB
+    const auto driveGain = juce::Decibels::decibelsToGain (bp.driveDb);
+    const auto driveMix = juce::jmin (1.0f, bp.driveDb / 3.0f);
+    auto drive = [driveGain, driveMix] (float x) { return x + (std::tanh (x * driveGain) / driveGain - x) * driveMix; };
+
     for (int i = 0; i < num; ++i)
     {
         // Pitch and glide, every few samples
@@ -668,6 +805,7 @@ void SamplerEngine::renderVoice (Voice& v, juce::AudioBuffer<float>& out, int st
                 }
             }
             v.inc = v.rateScale * std::exp2 ((v.semis + bp.tuneSemis) / 12.0f);
+            updateModulation (v);
         }
 
         float l = 0, r = 0;
@@ -782,6 +920,55 @@ void SamplerEngine::renderVoice (Voice& v, juce::AudioBuffer<float>& out, int st
             freeVoice (v);
             return;
         }
+
+        // ---- drive + filter ----
+        if (driveMix > 0.0f)
+        {
+            l = drive (l);
+            r = stereoSample ? drive (r) : l;
+        }
+        if (bp.fltType == 4)
+        {
+            const auto fb = v.combFeedback;
+            for (int ch = 0; ch < (stereoSample ? 2 : 1); ++ch)
+            {
+                auto* line = v.comb.data() + ch * combLength;
+                auto readPos = (float) v.combWrite - v.combDelay;
+                if (readPos < 0) readPos += (float) combLength;
+                const int i0 = (int) readPos;
+                const auto frac = readPos - (float) i0;
+                const auto delayed = line[i0] + frac * (line[(i0 + 1) % combLength] - line[i0]);
+                auto& x = ch == 0 ? l : r;
+                const auto y = x + fb * delayed;
+                line[v.combWrite] = y;
+                x = y * (1.0f - fb);
+            }
+            v.combWrite = (v.combWrite + 1) % combLength;
+        }
+        else
+        {
+            for (int ch = 0; ch < (stereoSample ? 2 : 1); ++ch)
+            {
+                auto& x = ch == 0 ? l : r;
+                const auto s1 = svfStep (v.svf[0][ch].ic1, v.svf[0][ch].ic2, x, v.a11, v.a12, v.a13);
+                switch (bp.fltType)
+                {
+                    case 0:  x = svfStep (v.svf[1][ch].ic1, v.svf[1][ch].ic2, s1.low, v.a21, v.a22, v.a23).low; break;
+                    case 2:  x = v.k1 * s1.band; break;
+                    case 3:  x = x - v.k1 * s1.band - s1.low; break;
+                    default: x = s1.low; break;
+                }
+            }
+        }
+        if (! stereoSample)
+            r = l;
+        l *= v.panModL;
+        r *= v.panModR;
+
+        v.env2Value = v.env2.getNextSample();
+        v.env3Value = v.env3.getNextSample();
+        ++v.samplesSinceMod;
+        v.age += 1.0;
 
         auto gain = v.env.getNextSample();
         if (v.killing)
