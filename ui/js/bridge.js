@@ -94,6 +94,7 @@ export async function createBridge() {
   const recTakeEv = new Emitter();
   let mockRec = null;
   const meterEv = new Emitter();
+  const presetEv = new Emitter();
   let instrument = null;   // { version, velocityCurve, layers: [...] }
 
   const native = (name) => (Juce ? Juce.getNativeFunction(name) : null);
@@ -113,6 +114,7 @@ export async function createBridge() {
     window.__JUCE__.backend.addEventListener('meters', (m) => meterEv.emit(m));
     window.__JUCE__.backend.addEventListener('recorderState', (st) => recStateEv.emit(st));
     window.__JUCE__.backend.addEventListener('recorderTake', (t) => recTakeEv.emit(t));
+    window.__JUCE__.backend.addEventListener('preset', (p) => presetEv.emit(p));
   } else {
     const { MockRecorder } = await import('./mock-recorder.js');
     mockRec = new MockRecorder();
@@ -121,6 +123,65 @@ export async function createBridge() {
     // Fake meters + stats so the preview feels alive
     let t = 0;
     setInterval(() => { t += 0.1; meterEv.emit({ l: 0.55 + 0.1 * Math.sin(t), r: 0.5 + 0.1 * Math.cos(t * 1.3), voices: 6, cpu: 4.1 }); }, 80);
+  }
+
+  // ---------- preview-mode presets (localStorage), same results as Source/PresetManager ----------
+  const mockPresets = {
+    current: { name: 'Init', category: '', path: '' },
+    all() { try { return JSON.parse(localStorage.getItem('mtya.presets') || '[]'); } catch { return []; } },
+    store(list) { try { localStorage.setItem('mtya.presets', JSON.stringify(list)); } catch { /* storage blocked */ } },
+    setCurrent(p) { this.current = { name: p.name, category: p.category, path: p.path }; presetEv.emit(this.current); },
+    list() {
+      return this.all().map(({ name, category, path }) => ({ name, category, path }))
+        .sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
+    },
+    async load(path) {
+      const p = this.all().find((x) => x.path === path);
+      if (!p) return { ok: false, message: 'Preset not found' };
+      for (const [id, v] of params) v.setValue(id in p.params ? p.params[id] : v.spec.default);
+      instrument = JSON.parse(JSON.stringify(p.instrument));
+      layersEv.emit(instrument);
+      this.setCurrent(p);
+      return { ok: true, message: `Loaded “${p.name}”` };
+    },
+    save(name, category) {
+      if (!name) return { ok: false, message: 'Give the preset a name' };
+      const values = {};
+      for (const [id, v] of params) values[id] = v.getValue();
+      const path = (category ? category + '/' : '') + name;
+      const list = this.all().filter((x) => x.path !== path);
+      list.push({ name, category, path, params: values, instrument: JSON.parse(JSON.stringify(instrument)) });
+      this.store(list);
+      this.setCurrent({ name, category, path });
+      return { ok: true, message: `Saved “${name}”` };
+    },
+    async step(d) {
+      const list = this.list();
+      if (!list.length) return { ok: false, message: 'No presets yet: press Save to make one' };
+      const i = list.findIndex((x) => x.path === this.current.path);
+      const next = i < 0 ? (d > 0 ? 0 : list.length - 1) : (i + d + list.length) % list.length;
+      return this.load(list[next].path);
+    },
+    async init() {
+      for (const [, v] of params) v.setValue(v.spec.default);
+      instrument = await (await fetch('demo-layers.json')).json();
+      layersEv.emit(instrument);
+      this.setCurrent({ name: 'Init', category: '', path: '' });
+      return { ok: true, message: 'Back to the Init sound' };
+    }
+  };
+  async function mockCommand(name, ...args) {
+    switch (name) {
+      case 'presetList': return mockPresets.list();
+      case 'presetCurrent': return mockPresets.current;
+      case 'presetLoad': return mockPresets.load(args[0]);
+      case 'presetSave': return mockPresets.save(String(args[0] || '').trim(), String(args[1] || '').trim());
+      case 'presetPrev': return mockPresets.step(-1);
+      case 'presetNext': return mockPresets.step(1);
+      case 'presetInit': return mockPresets.init();
+      case 'peaks': return { ok: false, meta: 'Preview: no audio files' };
+      default: return { ok: false, reason: 'preview' };
+    }
   }
 
   return {
@@ -141,6 +202,7 @@ export async function createBridge() {
     },
     onInstrument: (fn) => layersEv.on(fn),
     onMeters: (fn) => meterEv.on(fn),
+    onPreset: (fn) => presetEv.on(fn),
     async noteOn(note, vel) { if (inPlugin) await native('noteOn')(note, vel); },
     async noteOff(note) { if (inPlugin) await native('noteOff')(note); },
     async wheel(kind, value) { if (inPlugin) await native('wheel')(kind, value); },
@@ -151,9 +213,10 @@ export async function createBridge() {
     },
     onRecorderState: (fn) => recStateEv.on(fn),
     onRecorderTake: (fn) => recTakeEv.on(fn),
-    // Things the C++ side does with native dialogs (file choosers, preset browser).
+    // Things the C++ side does: presets, file dialogs, sample analysis, instrument edits.
+    // Returns { ok, message? } (or data). In the preview, presets are mocked; the rest says 'preview'.
     async command(name, ...args) {
-      if (!inPlugin) return { ok: false, reason: 'preview' };
+      if (!inPlugin) return mockCommand(name, ...args);
       return native('command')(name, ...args);
     }
   };

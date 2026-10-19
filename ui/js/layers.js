@@ -62,7 +62,8 @@ export function setupLayers(bridge, ui) {
       list.appendChild(row);
     });
     const l = cur();
-    $('sel-file').textContent = l ? (l.samples[0] || l.name) : '—';
+    $('sel-file').textContent = l ? (String(l.samples[0] || l.name).split(/[\\/]/).pop()) : '—';
+    if (ui.layerChanged) ui.layerChanged(l);
     $('sel-root').textContent = l ? noteName(l.root) : '—';
     // zone bar spans the on-screen keyboard (ui.kbdRange)
     const [k0, k1] = ui.kbdRange();
@@ -367,7 +368,7 @@ export function setupLayers(bridge, ui) {
           input.type = 'text';
           input.spellcheck = false;
           if (f.kind === 'note') input.value = noteName(l[f.key]);
-          else if (f.kind === 'readonly') { input.value = `${(rrPos % l.samples.length) + 1} / ${l.samples.length}`; input.readOnly = true; }
+          else if (f.kind === 'readonly') { input.value = `${(rrPos % l.samples.length) + 1} / ${l.samples.length}`; input.readOnly = true; input.dataset.rrpos = '1'; }
           else input.value = l[f.key] ?? '';
           if (f.kind === 'int' || f.kind === 'num') input.inputMode = 'decimal';
         }
@@ -396,7 +397,7 @@ export function setupLayers(bridge, ui) {
         sec.buttons.forEach(([cmd, label]) => {
           const b = document.createElement('button');
           b.className = 'btn'; b.textContent = label;
-          b.onclick = () => ui.command(cmd, sel);
+          b.onclick = () => ui.command(cmd, cur()?.id);
           row.appendChild(b);
         });
         s.appendChild(row);
@@ -425,6 +426,13 @@ export function setupLayers(bridge, ui) {
     if (editing) return;
     renderGroups(); renderGrid(); renderStrip(); renderTable(); renderRR(); renderCurve(); renderInspector();
   }
+  // The engine reports where each layer's round robin is (plugin only)
+  bridge.onMeters((m) => {
+    const l = cur(), el = document.querySelector('[data-rrpos]');
+    if (!m.rr || !l || !el || m.rr[l.id] === undefined) return;
+    const n = l.samples.length;
+    el.value = `${(m.rr[l.id] % n) + 1} / ${n}`;
+  });
   bridge.onInstrument((next) => { inst = next; if (sel >= inst.layers.length) sel = Math.max(0, inst.layers.length - 1); renderAll(); });
   renderAll();
 

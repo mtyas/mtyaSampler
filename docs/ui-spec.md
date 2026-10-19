@@ -60,18 +60,39 @@ Native functions (JS calls C++):
 | `noteOn` | note, velocity (0–127) | — |
 | `noteOff` | note | — |
 | `wheel` | `"pitch"` or `"mod"`, value 0–1 | — |
-| `command` | name, …args | `{ ok, reason?, message? }` |
+| `command` | name, …args | `{ ok, reason?, message? }` or data (see below) |
 
 | `recorder` | command, JSON argument | result `{ ok, message? }` |
 
-`recorder` commands: `start` (plan from `plan.js` `buildPlan`), `pause`, `resume`, `retake` (redo the last saved take), `skip`, `next`, `goto` (take index), `stop`, `monitor` (bool). The `command` function also handles `chooseFolder`, which returns `{ ok, path }`.
+`recorder` commands: `start` (plan from `plan.js` `buildPlan`), `pause`, `resume`, `retake` (redo the last saved take), `skip`, `next`, `goto` (take index), `stop`, `monitor` (bool).
+
+`command` names (`Source/PluginEditor.cpp`). A `message`, when there is one, is shown as a toast:
+
+| Name | Arguments | Does |
+|---|---|---|
+| `presetList` | — | `[{ name, category, path }]` |
+| `presetLoad` / `presetSave` | path / name, category | loads or saves `Documents/mtyaSampler/Presets/<Category>/<Name>.mtyapreset` |
+| `presetPrev` / `presetNext` / `presetInit` / `presetCurrent` / `presetReveal` | — | step through the list, reset to defaults, report the current one, show the folder |
+| `importSamples` | — | folder chooser; every audio file becomes layers, mapped by name (async) |
+| `importDropped` | JSON `[{ name, data (base64) }]` | files dropped on the window, saved to `Samples/Dropped`, then imported the same way |
+| `autoMap` / `fillGaps` | — | re-map layers from their file names / close key gaps between zones |
+| `learnRange` | layer id | waits up to 15 s for two notes, sets low/high key (async) |
+| `detectRoot` | layer id | YIN pitch detection on the layer's first sample → `root` |
+| `snapZero` | layer id | moves Start, End and the loop points to zero crossings of that sample |
+| `normalize` | layer id | toggles the layer's non-destructive `normalize` flag |
+| `peaks` | layer id | `{ ok, file, meta, peaks: [[min, max] × 1000] }` for the waveform |
+| `previewFile` / `stopPreview` | path / — | plays a WAV through the output once (Create page "Play") |
+| `chooseFolder` | start folder | `{ ok, path }` |
+
+In the browser preview, `bridge.js` keeps presets in localStorage; the other commands answer `{ reason: 'preview' }`.
 
 Events (C++ → JS):
 - `instrumentChanged`: the instrument JSON.
 - `meters`: `{ l, r, voices, cpu, samples, missing }`, 30 per second. `samples` and `missing` count the loaded and not-found sample files in the current instrument.
 - `recorderState`: `{ status, phase, take, total, saved, lastSaved, count, phaseTime, phaseLen, recSec, maxSec, inDb, clip, voiceInUi, voicePack, peaks[] }`, 30 per second.
 - `recorderTake`: `{ index, file, path, lengthSec, peakDb, clipped, empty, skipped, peaks[], error? }`, once per take.
-- Planned: `peaks` (waveform `[min, max]` pairs).
+- `preset`: `{ name, category, path }` when a preset is loaded, saved or reset.
+- `meters` also carries `rr` (`{ layerId: next round-robin position }`) and `previewing`.
 
 Parameters use JUCE's relays. In JS, `getSliderState(id)`, `getToggleState(id)` and `getComboBoxState(id)` are wrapped by `bridge.param(id)`, which offers `getValue`, `setValue`, `getNorm`, `setNorm`, `begin`, `end` and `onChange`.
 
@@ -108,18 +129,62 @@ How the engine reads the layer fields:
 - **Trigger:** `release` layers play on key-up (always through to the end), at `releaseVolume`, fading by e^(−held ms ÷ `releaseDecay`) the longer the key was held (0 = no fade). `legato` plays only while another key is held, `first` only when none is.
 - **Voice:** `polyphony` and `steal` apply per layer. `mono` retriggers, `legato` keeps the voice and changes pitch; both return to the last key still held. `glide` slides from the previous note (in poly mode too, when above 0). `choke` > 0 cuts every other voice in the same choke group.
 - **Keyswitch:** a layer with a keyswitch only plays while that keyswitch (or another with the same articulation) was the last one pressed; the lowest one is active at first. Keyswitch notes make no sound. Layers with −1 always play.
-- `output` is read but everything plays on Main until multi-out is added.
+- `output`: Bus 2–4 play on those plugin outputs when the host has switched them on (they skip the FX chain and Master); otherwise on Main.
+- `normalize: true` applies a gain so the layer's loudest sample peaks at 0 dBFS (the files aren't changed).
 
 Playback modes (`play_mode`, global): **One-shot** plays Start→End once, stopping early on key-up via the amp envelope. **Loop** plays into the loop and repeats Loop Start→Loop End with an equal-power crossfade (`loop_xfade`, limited by the audio before the loop start). **Ping-pong** bounces between the loop points. **Slice** splits Start→End into 16; the key's distance from the root picks the slice (root = slice 1), played at its own pitch. **Granular** sprays grains (`grn_size`, `grn_density`, `grn_spray`, `grn_pitchrnd`) around a position that starts at `grn_pos` and moves at normal speed, or stays at `grn_pos` while Freeze is on. Release samples always play as one-shots. Pitch bend is ±2 st; the sustain pedal (CC 64) holds notes.
 
-Sound design (per voice, in this order: sample → drive → filter → LFO 2 pan → Env 1 amp):
+Sound design (per voice: sample → filter with drive → modulated pan → Env 1 amp; then the FX chain and Master on the whole mix):
 
-- **Drive** (`flt_drive`): tanh soft clipping that keeps quiet signals at the same level and squares off loud ones; it fades in over the first 3 dB, and 0 dB is clean.
-- **Filter** (`flt_type`): LP24 (a resonant 12 dB stage plus a plain one), LP12, BP (unity at the centre), HP, all TPT state-variable filters with Q = 0.707 + Reso × 9 like the UI curve. **Comb** is a feedback comb with peaks at the cutoff and its multiples, feedback 0.2 + Reso × 0.75 (max 0.95), level-normalised at the peaks.
-- **Cutoff modulation:** Env 2 × Env Amt moves it up to ±6 octaves; LFO 3 at 100 % depth moves it ±3 octaves.
-- **Envelopes:** Env 1 = amp, Env 2 = filter, Env 3 → grain size (×0.5 at 0, ×1 at half, ×2 at full).
-- **LFOs** run per voice from the note start (Phase sets where they begin; Fade In ramps the depth from zero). Shapes match the display: sine, triangle, saw (falling), square, S&H (new random value each cycle). Destinations: LFO 1 → grain position (± half the region), LFO 2 → pan (balance), LFO 3 → cutoff, LFO 4 → grain spray (adds to Spray).
-- Filter and modulation update every 32 samples.
+- **Filter** (`flt_type`), all running at 2× the sample rate with half-band FIR up/down-sampling, the knobs smoothed over ~10 ms:
+  - **LP24**: a zero-delay-feedback transistor ladder with tanh stages. Resonance past ~95 % self-oscillates; the passband is compensated so turning it up doesn't thin the bass much.
+  - **LP12 / BP / HP**: a state-variable filter with Q = 0.707 + Reso × 9 up to 90 % (like the UI curve); above that the damping goes negative and it self-oscillates. Its band state saturates, so loud resonant peaks compress like an analogue filter. BP is unity at the centre.
+  - **Comb**: feedback comb with peaks at the cutoff and its multiples, a damped, DC-blocked, saturating loop; past 90 % the feedback exceeds 1 and it rings on its own.
+  - **Drive** (`flt_drive`) is the level going into the filter (0–24 dB, ±24 dB more from modulation), with the output compensated.
+- **Cutoff**: the knob, plus Env 2 × Env Amt (±6 octaves), plus any `cutoff` routes.
+- **Envelopes**: Env 1 = amp (fixed). Env 2 and Env 3 are mod sources (Env 2 also drives Env Amt).
+- **LFOs** run per voice from the note start (Phase sets where they begin; Fade In ramps the depth from zero). Shapes match the display: sine, triangle, saw (falling), square, S&H (new random value each cycle). Depth scales the LFO before its routes.
+- Modulation and the filter coefficients update every 32 samples and glide in between.
+
+### Modulation (`"modRoutes"`)
+
+```json
+"modRoutes": [
+  { "source": "lfo1", "target": "grain_pos", "amount": 50 },
+  { "source": "macro3", "target": "param:fx_reverb_mix", "amount": 30 }
+]
+```
+
+Sources: `env2`, `env3` (0…1), `lfo1`…`lfo4` (−1…1 × depth), `velocity` (0…1), `key` ((note − 60) / 60), and the global ones `macro1`…`macro4`, `modwheel`, `aftertouch` (0…1). Amount is −100…100 %.
+
+| Target | 100 % means |
+|---|---|
+| `pitch` | ±24 semitones |
+| `volume` | ×(1 ± 1), clamped at 0 |
+| `pan` | hard left/right (balance) |
+| `cutoff` | ±6 octaves |
+| `reso` | ±100 % resonance |
+| `drive` | ±24 dB |
+| `grain_pos` | ± the whole start–end region |
+| `grain_size`, `grain_density` | ×¼ … ×4 |
+| `grain_spray` | ±100 % |
+| `grain_pitchrnd` | ±12 st |
+| `start` | sample start moves up to the end of the region (read at note-on) |
+| `param:<id>` | any float parameter, ± its whole range (global sources only) |
+
+Global sources are applied once per block; per-voice ones per voice. An instrument without `"modRoutes"` gets the defaults (`defaultModRoutes()` in `Source/InstrumentMap.cpp`, `DEFAULT_ROUTES` in `ui/js/modmatrix.js`): Env 3 → grain size, LFO 1 → grain pos, LFO 2 → pan, LFO 3 → cutoff, LFO 4 → spray, and two targets for each macro. An empty list means nothing is modulated.
+
+### FX chain
+
+`"fxOrder": ["sat", "crush", "chorus", "delay", "reverb"]` sets the order (dragged in the UI). Each effect fades in and out over 20 ms when switched and is skipped while off.
+
+| Effect | Parameters |
+|---|---|
+| Saturate | Drive, Type (soft tanh, hard clip, tube = asymmetric, fold), Tone (low-pass 800 Hz…open), Mix; 2× oversampled |
+| Bitcrush | Bits, Rate (sample-and-hold 500 Hz…48 kHz), Mix |
+| Chorus | Mix, Rate, Depth, Feedback (`juce::dsp::Chorus`) |
+| Delay | Time or Sync + Division (host tempo), Feedback, Mix, Ping-pong, Tone (low-pass in the loop); time changes glide |
+| Reverb | Mix, Size, Damping, Width, Pre-delay (`juce::dsp::Reverb`) |
 
 ## Parameters (from ui/params.json)
 

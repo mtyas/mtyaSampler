@@ -4,13 +4,19 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 
 ## Current state (start here)
 
-- **UI: done.** `ui/` has both pages (Main, Layers), and every control is bound to a parameter. It runs in a browser in preview mode (`cd ui && py -m http.server 8765`).
+- **UI: done.** `ui/` has three pages (Main, Layers, Create), and every control is bound to a parameter. It runs in a browser in preview mode (`cd ui && py -m http.server 8765`).
+  - `js/modmatrix.js`: target popovers on the Env/LFO tags and under each macro, plus the full matrix dialog.
+  - `js/fxchain.js`: FX slots (drag to reorder, pencil = settings popover).
+  - `js/presets.js`: preset header, browser and Save dialog. `js/overlay.js`: shared popover/modal helpers.
 - **C++: builds on macOS** (VST3, CLAP, Standalone; `cmake --preset mac`). **Not yet built on Windows.** The first Windows job is to build it, load it in a DAW, and fix whatever the Windows build turns up.
 - **Sampler engine (roadmap 2–3): done, not yet tried in a DAW.**
   - `Source/InstrumentMap.*`: instrument JSON → immutable zone map; `SampleCache` loads files into RAM and finds bare file names.
   - `Source/SampleLoader.*`: background thread that builds maps and deletes old ones.
-  - `Source/SamplerEngine.*`: voices, round robin, trigger modes, voice modes, keyswitches, the five playback modes, plus per-voice drive, filter (LP24/LP12/BP/HP/Comb), Env 1–3 and the 4 LFOs on their fixed destinations (roadmap 4).
-  - `tests/EngineTests.cpp` (`mtyaEngineTests` target): offline checks for all of the above. Run it after engine changes.
+  - `Source/SamplerEngine.*`: voices, round robin, trigger modes, voice modes, keyswitches, the five playback modes, Env 1–3, the 4 LFOs and the modulation matrix; Bus 2–4 outputs.
+  - `Source/VoiceFilter.h`: the analogue-style filters (nonlinear ladder, saturating SVF and comb, 2× oversampled).
+  - `Source/FxChain.*`: the five effects in the instrument's order.
+  - `Source/PresetManager.*`, `Source/SampleTools.*`: presets, and the sample commands (import, auto-map, fill gaps, detect root, peaks…).
+  - `tests/EngineTests.cpp` (`mtyaEngineTests`, 81 checks) and `tests/PluginTests.cpp` (`mtyaPluginTests`: the real processor with buses and saved state). Run both after engine changes.
   - How each layer field and playback mode behaves is written down in `docs/ui-spec.md` (Instrument JSON).
 - **Create page (sample-recording assistant): done.**
   - UI: `ui/js/create.js` and `ui/js/plan.js`, with a browser preview engine in `ui/js/mock-recorder.js`.
@@ -41,8 +47,10 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
    - Spoken prompts come from a voice pack (`Documents/mtyaSampler/VoicePack/*.wav`, one file per word, made by `tools/make-voice-pack.ps1`) and play through the plugin output. If any word is missing, the UI speaks the prompts with the browser's speech synthesis instead.
 7. **The UI is a fixed 1280×920 design scaled to fit the window** (`fitToWindow` in main.js). The editor keeps that aspect ratio.
 
-8. **Engine threading.** The loader thread parses the JSON and loads samples, then `SamplerEngine::publish` swaps the new map in through an atomic pointer. The audio thread keeps the old map in a `draining` slot until no voice points into it, then hands it back through a FIFO (`popRetired`) and the loader deletes it. Voices hold raw pointers into their map, so never free a map anywhere else.
-9. **One-shot means "play once, no loop"**: it still stops on key-up through the amp envelope (a piano needs that). Only release-trigger samples ignore note-off.
+8. **Engine parameters come from `params.json`** through `SamplerEngine::makeParamList` (the APVTS's values in the plugin, the tests' own in tests). The engine reads them by index; `engine.param(i)` includes macro/mod-wheel modulation, and the FX chain reads through it too.
+9. **Modulation routes and the FX order live in the instrument JSON** (`modRoutes`, `fxOrder`), not in parameters, so presets carry them and hosts don't see hundreds of extra parameters.
+10. **Engine threading.** The loader thread parses the JSON and loads samples, then `SamplerEngine::publish` swaps the new map in through an atomic pointer. The audio thread keeps the old map in a `draining` slot until no voice points into it, then hands it back through a FIFO (`popRetired`) and the loader deletes it. Voices hold raw pointers into their map, so never free a map anywhere else.
+11. **One-shot means "play once, no loop"**: it still stops on key-up through the amp envelope (a piano needs that). Only release-trigger samples ignore note-off.
 
 ## Rules
 
@@ -70,7 +78,7 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
    - Check that the knobs move with host automation and that undo works.
    - Check that the state is saved and restored.
    - Check that the on-screen keyboard plays the placeholder voice.
-2. **Sample engine (core): done** (see Current state). Left over: multi-out (`output` is parsed, everything plays on Main), disk streaming, and showing `rrPos` in the inspector.
+2. **Sample engine (core): done** (see Current state). Left over: disk streaming for very large libraries.
 
    Original brief:
    - Load the files named in each layer's `samples` with `AudioFormatManager`. Keep them in RAM first; disk streaming can come later.
@@ -80,27 +88,23 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
    - Voices: polyphony per layer, choke groups, steal modes, poly/mono/legato voice modes, glide, keyswitch/articulation filtering.
    - Pitch from `root` and `keyTrack`, plus the `tune` and `fine` parameters. Volume, pan and output bus per layer (multi-out comes later).
 3. **Playback modes: done.** (`play_mode`): one-shot, loop (with `loop_xfade`), ping-pong, slice (16 slices between start and end), and granular (the `grn_*` parameters; Freeze holds the position).
-4. **Sound design: done**, with fixed destinations; the ranges are in `docs/ui-spec.md`. Left over: the mod-matrix page, and better interpolation than Hermite (it leaves images around −60 dB when transposing bright samples).
+4. **Sound design: done**, with a modulation matrix; ranges in `docs/ui-spec.md`. Left over: better interpolation than Hermite (it leaves images around −60 dB when transposing bright samples).
 
    Original brief:
    - Filter types (`flt_type`): LP24, LP12, BP, HP, Comb. `juce::dsp::StateVariableTPTFilter` or `LadderFilter` cover LP/BP/HP; the comb is custom.
    - 3 ADSRs: Env 1 = amp, Env 2 = filter (`flt_envamt`), Env 3 = mod.
    - 4 LFOs: shape, rate, depth, phase, fade.
    - Each envelope and LFO currently has one fixed destination, shown in the UI. Later, add a mod-matrix page.
-5. **FX chain:** saturate, bitcrush, chorus, delay, reverb. Each has an on switch and one amount parameter; add more parameters per effect as needed.
-6. **Macros:** `macro1..4` each map to several targets. This needs a small mapping model, stored in the instrument JSON.
-7. **Native commands:**
-   - `handleCommand` in PluginEditor.cpp currently returns "not implemented". Build out `importSamples` (folder chooser), `autoMap` (parse note names and velocity tags like `C3_mf_rr2` from file names), `fillGaps`, `learnRange` (listen for MIDI), `detectRoot` (pitch detection), presets (`presetPrev/Next/Browse/Save`), `snapZero` and `normalize`.
-   - Waveform peaks: send a `peaks` event with an array of `[min, max]` pairs, and call `displays.setPeaks()` in the UI.
+5. **FX chain: done** (drag to reorder, settings per effect).
+6. **Macros: done** (routes in the mod matrix).
+7. **Native commands: done**: presets and browser, import (folder and drag-and-drop), auto-map, fill gaps, learn range, detect root, snap to zero, normalize, waveform peaks.
 8. **Create page next steps:**
    - Test it in Reaper, Bitwig and the Standalone app with a real mic or instrument; check input routing and latency.
    - Optionally send the MIDI note out to a hardware synth so synth sampling is fully hands-free (the plugin would then need MIDI output).
-   - Session normalize currently rewrites the files on the message thread. Move it to a background thread for big sessions.
-   - Add a "listen back" button for the last take (play the WAV through the plugin).
+   - Done: session normalize runs on a background thread (and the sampler reloads the rewritten files); recent takes have a Play button.
 9. **Polish:**
    - Bundle the fonts into `ui/fonts/` and replace the Google Fonts `@import`, because a DAW machine may be offline.
-   - Drag-and-drop of audio files onto the UI.
-   - Remember the window size.
+   - Done: drag-and-drop import, window size remembered.
 
 ## Gotchas
 
@@ -109,3 +113,5 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 - **Computer-keyboard notes:** the UI maps the A–K row to notes. Some DAWs take keystrokes first; that's expected.
 - **Debug assert on startup:** probably `params.json` isn't embedded or isn't valid JSON (jassert in `ParameterSpec::load`).
 - **Keep `ui/js/juce/` out of git.** CMake copies it from JUCE on every configure.
+- **Dropped files arrive as base64** over the bridge (a WebView can't give the page real file paths), capped at 200 MB per file; Import folder… is better for big libraries.
+- **A popover or modal must be inside `#app`** (overlay.js does this) so it scales with the window.

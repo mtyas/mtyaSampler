@@ -92,7 +92,8 @@ export function setupDisplays(bridge) {
   // ---------- filter response (approximate magnitude, for display only) ----------
   on(['flt_type', 'flt_cutoff', 'flt_reso', 'flt_drive'], () => {
     const type = val('flt_type'), fc = val('flt_cutoff'), res = val('flt_reso') / 100;
-    const Q = 0.707 + res * 9;
+    // Same as the engine up to 90 %; above that the filter self-oscillates (drawn as a very sharp peak)
+    const Q = res <= 0.9 ? 0.707 + res * 9 : Math.min(40, 8.807 + (res - 0.9) * 300);
     let d = '';
     for (let i = 0; i <= 130; i++) {
       const x = i * 2, f = 20 * Math.pow(1000, x / 260), w = f / fc;
@@ -112,7 +113,6 @@ export function setupDisplays(bridge) {
   });
 
   // ---------- envelope (current tab) ----------
-  const envTags = { 1: 'Vel → 60%', 2: '→ Cutoff', 3: '→ Grain Size' };
   let envN = 1;
   const drawEnv = () => {
     const n = (id) => P(`env${envN}_${id}`).getNorm();
@@ -124,12 +124,10 @@ export function setupDisplays(bridge) {
     const color = envN === 3 ? 'var(--mod)' : 'var(--acc)';
     $('e-curve').setAttribute('d', d); $('e-curve').setAttribute('stroke', color);
     $('e-fill').setAttribute('d', d + ' Z'); $('e-fill').setAttribute('fill', color);
-    $('env-tag').textContent = envTags[envN];
   };
   for (let i = 1; i <= 3; i++) ['attack', 'decay', 'sustain', 'release'].forEach((k) => P(`env${i}_${k}`).onChange(() => i === envN && drawEnv()));
 
   // ---------- LFO (current tab) ----------
-  const lfoDest = { 1: '→ Grain Pos', 2: '→ Pan', 3: '→ Cutoff', 4: '→ Spray' };
   const SH = [0.6, -0.3, 0.9, -0.8, 0.2, -0.5, 0.75, -0.1];
   const shapes = [
     (t) => Math.sin(t * 2 * Math.PI),
@@ -151,7 +149,6 @@ export function setupDisplays(bridge) {
       d += (i ? ' L' : 'M') + i + ' ' + (32 - f(t) * 24 * (0.15 + 0.85 * depth) * env).toFixed(1);
     }
     $('l-curve').setAttribute('d', d);
-    $('lfo-dest').textContent = lfoDest[lfoN];
   };
   for (let i = 1; i <= 4; i++) ['shape', 'rate', 'depth', 'phase', 'fade'].forEach((k) => P(`lfo${i}_${k}`).onChange(() => i === lfoN && drawLfo()));
 

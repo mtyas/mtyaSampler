@@ -17,6 +17,8 @@ MtyaSamplerProcessor::MtyaSamplerProcessor()
       loader (engine)
 {
     masterVol = apvts.getRawParameterValue ("master_vol");
+    // After session normalize rewrites the takes, rebuild the instrument so the new audio is used
+    recorder.onFilesRewritten = [this] { setInstrumentJson (getInstrumentJson(), false); };
     setInstrumentJson (UiResources::getText ("demo-layers.json"), false);
 }
 

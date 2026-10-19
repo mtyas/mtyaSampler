@@ -320,13 +320,17 @@ export function setupCreate(bridge, ui) {
       const bad = r.empty || r.clipped;
       d.className = 'rt' + (bad ? ' bad' : '');
       const what = plan?.settings.pitched ? noteName(r.take.note) : 'Sound ' + (r.take.rootIndex + 1);
-      d.innerHTML = `<b></b><button class="btn" style="height:22px">Redo</button><span class="meta"></span><span class="meta${bad ? ' warn' : ''}"></span><svg viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true"><path d="${miniPath(r.peaks || [])}"/></svg>`;
+      d.innerHTML = `<b></b><span class="rt-btns"><button class="btn play" style="height:22px" ${r.path && !r.empty ? '' : 'disabled'}>Play</button><button class="btn redo" style="height:22px">Redo</button></span><span class="meta"></span><span class="meta${bad ? ' warn' : ''}"></span><svg viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true"><path d="${miniPath(r.peaks || [])}"/></svg>`;
       d.querySelector('b').textContent = `${what}${plan?.settings.vel > 1 ? ' · ' + r.take.velLabel : ''}${plan?.settings.rr > 1 ? ' · RR ' + (r.take.rr + 1) : ''}`;
       const metas = d.querySelectorAll('.meta');
       metas[0].textContent = r.file || r.take.file;
       metas[1].textContent = r.empty ? 'Nothing heard: redo' : r.clipped ? `Clipped (${r.peakDb} dB): redo` : `${r.lengthSec} s · peak ${r.peakDb} dB`;
-      d.querySelector('button').onclick = () => bridge.recorder('goto', r.index);
-      d.querySelector('button').setAttribute('aria-label', 'Redo ' + what);
+      const redo = d.querySelector('.redo'), play = d.querySelector('.play');
+      redo.onclick = () => bridge.recorder('goto', r.index);
+      redo.setAttribute('aria-label', 'Redo ' + what);
+      // Listen back: plays the saved WAV through the plugin's output
+      play.setAttribute('aria-label', 'Play ' + what);
+      play.onclick = () => ui.command('previewFile', r.path);
       el.appendChild(d);
     });
   }

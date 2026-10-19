@@ -145,3 +145,13 @@ if(MTYA_BUILD_TESTS)
             juce::juce_recommended_config_flags
             juce::juce_recommended_warning_flags)
 endif()
+
+# Processor tests: the real plugin code (engine + FX + buses + state) driven offline.
+if(MTYA_BUILD_TESTS)
+    juce_add_console_app(mtyaPluginTests PRODUCT_NAME "mtyaPluginTests")
+    target_sources(mtyaPluginTests PRIVATE tests/PluginTests.cpp)
+    # Same headers and defines as the plugin's shared code, which it links against
+    target_include_directories(mtyaPluginTests PRIVATE $<TARGET_PROPERTY:mtyaSampler,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(mtyaPluginTests PRIVATE $<TARGET_PROPERTY:mtyaSampler,COMPILE_DEFINITIONS>)
+    target_link_libraries(mtyaPluginTests PRIVATE mtyaSampler)
+endif()

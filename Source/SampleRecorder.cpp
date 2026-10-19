@@ -446,6 +446,9 @@ void SampleRecorder::publish()
 // ============================================================================ message thread
 void SampleRecorder::timerCallback()
 {
+    if (filesRewritten.exchange (false) && onFilesRewritten)
+        onFilesRewritten();
+
     const int skipped = pendingSkip.exchange (-1);
     if (skipped >= 0 && onTake)
     {
@@ -565,30 +568,41 @@ void SampleRecorder::normalizeSession()
     if (loudest <= 0.0f || loudest >= 0.89f) return;
     const float gain = 0.891f / loudest;
 
+    std::vector<juce::File> files;
     for (const auto& s : savedTakes)
-    {
-        std::unique_ptr<juce::AudioFormatReader> reader { formats.createReaderFor (s.file) };
-        if (reader == nullptr) continue;
-        juce::AudioBuffer<float> buf ((int) reader->numChannels, (int) reader->lengthInSamples);
-        reader->read (&buf, 0, buf.getNumSamples(), 0, true, true);
-        const auto sr = reader->sampleRate;
-        reader.reset();
-        buf.applyGain (gain);
+        files.push_back (s.file);
 
-        const auto tmp = s.file.getSiblingFile (s.file.getFileNameWithoutExtension() + ".tmp.wav");
-        bool ok = false;
+    // Rewriting every take can take a while on a big session, so it runs on its own thread.
+    normalizePool.addJob ([this, files, gain]
+    {
+        juce::AudioFormatManager readers;
+        readers.registerBasicFormats();
+        for (const auto& file : files)
         {
-            std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (tmp);
-            juce::WavAudioFormat wav;
-            if (auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions{}
-                                                               .withSampleRate (sr)
-                                                               .withNumChannels (buf.getNumChannels())
-                                                               .withBitsPerSample (24)))
-                ok = writer->writeFromAudioSampleBuffer (buf, 0, buf.getNumSamples());
+            std::unique_ptr<juce::AudioFormatReader> reader { readers.createReaderFor (file) };
+            if (reader == nullptr) continue;
+            juce::AudioBuffer<float> buf ((int) reader->numChannels, (int) reader->lengthInSamples);
+            reader->read (&buf, 0, buf.getNumSamples(), 0, true, true);
+            const auto sr = reader->sampleRate;
+            reader.reset();
+            buf.applyGain (gain);
+
+            const auto tmp = file.getSiblingFile (file.getFileNameWithoutExtension() + ".tmp.wav");
+            bool ok = false;
+            {
+                std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (tmp);
+                juce::WavAudioFormat wav;
+                if (auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions{}
+                                                                   .withSampleRate (sr)
+                                                                   .withNumChannels (buf.getNumChannels())
+                                                                   .withBitsPerSample (24)))
+                    ok = writer->writeFromAudioSampleBuffer (buf, 0, buf.getNumSamples());
+            }
+            if (ok) tmp.moveFileTo (file);
+            else tmp.deleteFile();
         }
-        if (ok) tmp.moveFileTo (s.file);
-        else tmp.deleteFile();
-    }
+        filesRewritten = true;   // the timer tells the processor, which reloads the samples
+    });
 }
 
 juce::var SampleRecorder::getState() const

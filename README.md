@@ -6,7 +6,7 @@ A sampler instrument with sound-design tools (granular engine, filter, 3 envelop
 
 **Create your own samples:** the Create page is a recording assistant. You choose an instrument preset, note range, how often to sample (every note, every 3 notes…), round robins, velocity layers and the longest take. It then guides you note by note: it announces the note, plays a reference tone and counts you in, then records what you play into the plugin's input. Each take is trimmed, saved as a WAV and mapped straight into the Layers page.
 
-**Status:** the UI is complete and wired to every parameter. The sampler engine plays the layers: key/velocity mapping with crossfades, round robin, trigger modes, voice modes, keyswitches all five playback modes (one-shot, loop, ping-pong, slice, granular), and the filter, three envelopes and four LFOs. The FX chain and macros are next; see [CLAUDE.md](CLAUDE.md), *Roadmap*.
+**Status:** the UI is complete and wired to every parameter. The sampler engine plays the layers: key/velocity mapping with crossfades, round robin, trigger modes, voice modes, keyswitches all five playback modes (one-shot, loop, ping-pong, slice, granular), analogue-style filters that self-oscillate, three envelopes, four LFOs and macros with a modulation matrix, a reorderable FX chain, presets with a browser, multi-out (Bus 2–4), and sample tools (import, auto-map by name, detect root, snap to zero, normalize). Next: building and testing on Windows in a DAW; see [CLAUDE.md](CLAUDE.md), *Roadmap*.
 
 **Where samples are found:** a layer's `samples` can be full paths or bare file names. Bare names are looked up in the instrument's `sampleFolder` (if set), then anywhere under `Documents\mtyaSampler\Recordings` and `Documents\mtyaSampler\Samples`, so takes from the Create page are found automatically. A file that can't be found plays a quiet sine at the layer's root, so you can still check the mapping; the header's `missing` count says how many.
 
@@ -77,7 +77,7 @@ To see UI changes inside the real plugin without rebuilding, build the `uidev` p
 
 ## Engine tests
 
-`tests/EngineTests.cpp` plays generated WAV files through the engine offline and checks pitch, round robin, velocity crossfades, trigger and voice modes, keyswitches and every playback mode. Build the `mtyaEngineTests` target and run it; it prints one line per check.
+`tests/EngineTests.cpp` plays generated WAV files through the engine offline and checks pitch, round robin, velocity crossfades, trigger and voice modes, keyswitches, every playback mode, the filters (including self-oscillation), modulation, the FX and the sample tools. `tests/PluginTests.cpp` drives the real processor (buses, saved state). Build the `mtyaEngineTests` and `mtyaPluginTests` targets and run them; they print one line per check.
 
 On a Mac (handy for engine work; the plugin also builds there as VST3/CLAP/Standalone):
 
@@ -85,7 +85,10 @@ On a Mac (handy for engine work; the plugin also builds there as VST3/CLAP/Stand
 cmake --preset mac
 cmake --build --preset mac-release
 build-mac/mtyaEngineTests_artefacts/Release/mtyaEngineTests
+build-mac/mtyaPluginTests_artefacts/Release/mtyaPluginTests
 ```
+
+**Presets** are saved to `Documents\mtyaSampler\Presets\<Category>\<Name>.mtyapreset` (every parameter plus the layers, modulation and FX order).
 
 ## Folder map
 

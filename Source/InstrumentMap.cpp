@@ -170,21 +170,32 @@ SamplePtr SampleCache::get (const juce::String& name, const juce::File& extraFol
     if (file == juce::File())
         return missingTone (rootNote);
 
+    // Reuse a loaded file unless it changed on disk (e.g. rewritten by session normalize)
     const auto key = file.getFullPathName();
-    if (auto it = cache.find (key); it != cache.end())
+    const auto modified = file.getLastModificationTime();
+    if (auto it = cache.find (key); it != cache.end() && loadedAt[key] == modified)
         return it->second;
 
     auto s = load (file);
     if (s == nullptr)
         return missingTone (rootNote);
     cache[key] = s;
+    loadedAt[key] = modified;
     return s;
 }
 
 void SampleCache::prune()
 {
     for (auto it = cache.begin(); it != cache.end();)
-        it = it->second.use_count() == 1 ? cache.erase (it) : std::next (it);
+    {
+        if (it->second.use_count() == 1)
+        {
+            loadedAt.erase (it->first);
+            it = cache.erase (it);
+        }
+        else
+            ++it;
+    }
 }
 
 // ---------------- building a map ----------------

@@ -137,6 +137,7 @@ private:
 
     juce::AudioFormatManager formats;
     std::map<juce::String, SamplePtr> cache;          // key: full path, or "~tone:<root>"
+    std::map<juce::String, juce::Time> loadedAt;      // file modification time when it was loaded
     std::map<juce::String, juce::File> nameIndex;     // lower-case file name → file, from the search folders
     juce::uint32 nameIndexTime = 0;
 };

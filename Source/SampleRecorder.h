@@ -40,6 +40,9 @@ public:
     // Message thread. Called once per finished take: saved, empty or skipped.
     std::function<void (const juce::var&)> onTake;
 
+    // Message thread. Called when session normalize has rewritten the WAV files (so the sampler reloads them).
+    std::function<void()> onFilesRewritten;
+
     bool hasVoicePack() const noexcept { return ! voiceClips.empty(); }
     static juce::File defaultRecordingFolder();
     static juce::File voicePackFolder();
@@ -129,6 +132,10 @@ private:
     std::vector<SavedTake> savedTakes;
     int emptyRetries = 0, emptyRetryTake = -1;
     bool sessionNormalized = true;
+
+    // Session normalize rewrites the files on its own thread (a big session takes a while)
+    std::atomic<bool> filesRewritten { false };
+    juce::ThreadPool normalizePool { 1 };   // last member: destroyed first, waiting for a running job
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SampleRecorder)
 };

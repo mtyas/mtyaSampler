@@ -29,7 +29,7 @@
     <button class="btn" data-action="presetSave">Save</button>
   </div>
   <div class="stats">
-    <div class="stat"><span>Voices</span><span id="stat-voices">00 / 32</span></div>
+    <div class="stat"><span>Voices</span><span id="stat-voices">00 / 96</span></div>
     <div class="stat"><span>CPU</span><span id="stat-cpu">0.0%</span></div>
     <div class="master"><span>Master</span><div class="hslider" data-hslider="master_vol"></div></div>
     <div class="meter" aria-hidden="true"><div><i id="meter-l" style="height:0%"></i></div><div><i id="meter-r" style="height:0%"></i></div></div>
@@ -109,7 +109,7 @@
             <button role="tab" data-tab="3" aria-selected="false" data-color="mod">Mod</button>
           </div>
         </div>
-        <span class="meta" id="env-tag">Vel → 60%</span>
+        <button class="modtag acc" id="env-tag" data-keep-pop>Amp</button>
       </div>
       <div class="well disp"><svg viewBox="0 0 260 64" preserveAspectRatio="none" role="img" aria-label="Envelope shape"><path id="e-fill" fill-opacity=".14"/><path id="e-curve" fill="none" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>
       <div class="knobs" data-knobs="env1_attack,env1_decay,env1_sustain,env1_release" data-group="env1"></div>
@@ -127,7 +127,7 @@
             <button role="tab" data-tab="4" aria-label="LFO 4" aria-selected="false" style="width:24px">4</button>
           </div>
         </div>
-        <span class="tag" id="lfo-dest">→ Grain Pos</span>
+        <button class="modtag" id="lfo-dest" data-keep-pop>→ Grain Pos</button>
       </div>
       <div class="well disp">
         <svg viewBox="0 0 260 64" preserveAspectRatio="none" role="img" aria-label="LFO waveform"><line x1="0" y1="32" x2="260" y2="32" stroke="#23262A" vector-effect="non-scaling-stroke"/><path id="l-curve" fill="none" stroke="var(--mod)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
@@ -145,12 +145,16 @@
 
   <div class="row3">
     <section class="panel fx" aria-label="Effects chain">
-      <div class="ph" style="height:18px"><h2 class="h">FX Chain</h2><span class="meta">Drag the bars to set amounts</span></div>
+      <div class="ph" style="height:18px"><h2 class="h">FX Chain</h2><span class="meta">Drag a slot to reorder · pencil for settings</span></div>
       <div class="fxgrid" id="fx-grid"></div>
     </section>
     <section class="panel macros" aria-label="Macros">
-      <div class="ph" style="height:18px"><h2 class="h">Macros</h2><span class="meta">Double-click a knob to reset</span></div>
+      <div class="ph" style="height:18px"><h2 class="h">Macros</h2><button class="btn small" id="open-matrix">Mod matrix</button></div>
       <div class="knobs around" data-knobs="macro1,macro2,macro3,macro4" data-color="mod"></div>
+      <div class="macro-routes" id="macro-routes">
+        <button class="modtag" data-macro="1" data-keep-pop></button><button class="modtag" data-macro="2" data-keep-pop></button>
+        <button class="modtag" data-macro="3" data-keep-pop></button><button class="modtag" data-macro="4" data-keep-pop></button>
+      </div>
     </section>
   </div>
 
@@ -358,6 +362,7 @@
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="drop-zone" id="drop-zone" hidden><div><b>Drop samples to import</b><span class="meta">They're copied to Documents/mtyaSampler/Samples/Dropped and mapped by name</span></div></div>
 </div>
 </div>
 <script type="module" src="js/main.js"></script>

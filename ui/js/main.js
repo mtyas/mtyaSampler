@@ -3,6 +3,9 @@ import { knob, hslider, segmented, toggle, tabs, setAppScale } from './controls.
 import { setupDisplays } from './displays.js';
 import { setupLayers, noteName } from './layers.js';
 import { setupCreate } from './create.js';
+import { setupFxChain } from './fxchain.js';
+import { setupModMatrix } from './modmatrix.js';
+import { setupPresets } from './presets.js';
 
 const $ = (id) => document.getElementById(id);
 const W = 1280, H = 920;
@@ -38,37 +41,13 @@ async function boot() {
   document.querySelectorAll('[data-hslider]').forEach((el) => hslider(bridge, el, el.dataset.hslider));
 
   // ---------- FX chain ----------
-  const FX = [
-    ['sat', 'Saturate', 'fx_sat_on', 'fx_sat_drive'],
-    ['crush', 'Bitcrush', 'fx_crush_on', 'fx_crush_bits'],
-    ['chorus', 'Chorus', 'fx_chorus_on', 'fx_chorus_mix'],
-    ['delay', 'Delay', 'fx_delay_on', 'fx_delay_fb'],
-    ['reverb', 'Reverb', 'fx_reverb_on', 'fx_reverb_mix']
-  ];
-  const fxGrid = $('fx-grid');
-  FX.forEach(([key, name, onId, amtId]) => {
-    const slot = document.createElement('div');
-    slot.className = 'fxslot';
-    slot.innerHTML =
-      `<div class="top-line"><b>${name}</b><button class="power" aria-label="${name} on/off"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 V6 M3.2 3.3 A3.8 3.8 0 1 0 8.8 3.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button></div>` +
-      `<span class="meta"></span><div class="hslider"></div>`;
-    fxGrid.appendChild(slot);
-    toggle(bridge, slot.querySelector('.power'), onId);
-    hslider(bridge, slot.querySelector('.hslider'), amtId);
-    const onP = bridge.param(onId), amtP = bridge.param(amtId);
-    const meta = slot.querySelector('.meta');
-    const upd = () => {
-      slot.classList.toggle('off', !onP.getValue());
-      const v = amtP.getValue(), s = amtP.spec;
-      meta.textContent = `${s.label} ${s.unit === 'bit' ? Math.round(v) + '-bit' : v.toFixed(s.decimals ?? 0) + (s.unit === '%' ? '%' : ' ' + s.unit)}`;
-    };
-    onP.onChange(upd); amtP.onChange(upd); upd();
-  });
+  setupFxChain(bridge);
 
   // ---------- displays + tabs ----------
   const displays = setupDisplays(bridge);
-  tabs($('env-tabs'), 'env', (n) => displays.setEnv(n));
-  tabs($('lfo-tabs'), 'lfo', (n) => displays.setLfo(n));
+  const mod = setupModMatrix(bridge);
+  tabs($('env-tabs'), 'env', (n) => { displays.setEnv(n); mod.setEnv(n); });
+  tabs($('lfo-tabs'), 'lfo', (n) => { displays.setLfo(n); mod.setLfo(n); });
 
   // ---------- pages ----------
   let currentPage = 'main';
@@ -168,7 +147,7 @@ async function boot() {
   bridge.onMeters((m) => {
     $('meter-l').style.height = Math.round((m.l ?? 0) * 100) + '%';
     $('meter-r').style.height = Math.round((m.r ?? 0) * 100) + '%';
-    if (m.voices !== undefined) $('stat-voices').textContent = String(m.voices).padStart(2, '0') + ' / 32';
+    if (m.voices !== undefined) $('stat-voices').textContent = String(m.voices).padStart(2, '0') + ' / 96';
     if (m.cpu !== undefined) $('stat-cpu').textContent = m.cpu.toFixed(1) + '%';
   });
 
@@ -177,24 +156,78 @@ async function boot() {
     kbdRange,
     toast,
     async command(name, ...args) {
+      if (name === 'learnRange') toast('Play the lowest key, then the highest key');
       const r = await bridge.command(name, ...args);
       if (r && r.reason === 'preview') toast(`“${name}” works inside the plugin`);
-      else if (r && r.ok === false) toast(r.message || `“${name}” failed`);
+      else if (r && r.message) toast(r.message);
+      else if (r && r.ok === false) toast(`“${name}” failed`);
       return r;
-    }
+    },
+    // The selected layer changed (or its samples did): show its real waveform
+    layerChanged: (() => {
+      let lastKey = '';
+      return async (l) => {
+        const key = l ? l.id + '|' + (l.samples[0] || '') : '';
+        if (key === lastKey) return;
+        lastKey = key;
+        if (!l) return;
+        if (!bridge.inPlugin) return;   // the preview keeps its drawn waveform
+        const r = await bridge.command('peaks', l.id);
+        if (key !== lastKey || !r) return;
+        displays.setPeaks(r.peaks && r.peaks.length ? r.peaks : []);
+        if (r.meta) $('sel-file-meta').textContent = r.meta;
+      };
+    })()
   };
   const layers = setupLayers(bridge, ui);
+  const presets = setupPresets(bridge, ui);
   ui.showGroup = layers.showGroup;
   create = setupCreate(bridge, ui);
   const octave = (d) => { baseOct = Math.max(-1, Math.min(6, baseOct + d)); buildKeys(); layers.renderMini(); };
   $('oct-down').onclick = () => octave(-1);
   $('oct-up').onclick = () => octave(1);
 
+  // Commands that act on the selected layer get its id
+  const LAYER_COMMANDS = new Set(['snapZero', 'normalize', 'detectRoot', 'learnRange']);
   document.querySelectorAll('[data-action]').forEach((b) => b.addEventListener('click', () => {
     const a = b.dataset.action;
     if (layers.actions[a]) layers.actions[a]();
+    else if (presets.actions[a]) presets.actions[a]();
+    else if (LAYER_COMMANDS.has(a)) ui.command(a, layers.current()?.id);
     else ui.command(a);
   }));
+
+  // ---------- drag audio files onto the window to import them ----------
+  const AUDIO = /\.(wav|aiff?|flac|ogg|mp3)$/i;
+  const zone = $('drop-zone');
+  let dragDepth = 0;
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; zone.hidden = false; });
+  window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; zone.hidden = true; } });
+  window.addEventListener('drop', async (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0; zone.hidden = true;
+    const files = [...e.dataTransfer.files].filter((f) => AUDIO.test(f.name));
+    if (!files.length) { toast('Drop WAV, AIFF, FLAC, OGG or MP3 files'); return; }
+    if (!bridge.inPlugin) { toast('Dropping samples works inside the plugin'); return; }
+    const tooBig = files.find((f) => f.size > 200 * 1024 * 1024);
+    if (tooBig) { toast(`“${tooBig.name}” is over 200 MB: use Import folder instead`); return; }
+    toast(`Importing ${files.length} file${files.length === 1 ? '' : 's'}…`);
+    const read = (f) => new Promise((ok, fail) => {
+      const r = new FileReader();
+      r.onload = () => ok({ name: f.name, data: String(r.result).split(',')[1] || '' });
+      r.onerror = () => fail(r.error);
+      r.readAsDataURL(f);
+    });
+    try {
+      ui.command('importDropped', JSON.stringify(await Promise.all(files.map(read))));
+    } catch (err) {
+      toast('Couldn’t read the dropped files');
+      console.error(err);
+    }
+  });
 
   if (!bridge.inPlugin) console.info('mtyaSampler UI: browser preview mode (no plugin connected).');
 }
