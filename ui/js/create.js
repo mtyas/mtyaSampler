@@ -27,6 +27,7 @@ export function setupCreate(bridge, ui) {
   let s = { ...DEFAULTS };
   try { Object.assign(s, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch { /* storage unavailable */ }
   let plan = null;          // active plan
+  let mapKey = '';          // which settings the take-map preview shows
   let status = [];          // per take: '', 'done', 'bad', 'skip'
   let recent = [];
   let st = { status: 'idle', phase: 'idle', take: 0, total: 0 };
@@ -131,6 +132,9 @@ export function setupCreate(bridge, ui) {
     $('plan-takes').textContent = `${p.takes.length} takes`;
     $('plan-detail').textContent = `${p.roots.length} × ${s.vel} velocity × ${s.rr} RR · up to ~${fmtDuration(p.estimateSec)}`;
     $('c-folder').placeholder = 'Documents/mtyaSampler/Recordings/' + (s.name || 'Session');
+    // Outside a session the take map previews the current settings
+    const key = JSON.stringify(p.takes.map((t) => [t.note, t.v, t.rr]));
+    if (!running() && key !== mapKey) { mapKey = key; plan = null; status = []; renderMap(); }
   }
 
   // ---------- session ----------

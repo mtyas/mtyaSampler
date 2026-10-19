@@ -6,6 +6,7 @@ import { setupCreate } from './create.js';
 import { setupFxChain } from './fxchain.js';
 import { setupModMatrix } from './modmatrix.js';
 import { setupPresets } from './presets.js';
+import { setupAbout } from './about.js';
 
 const $ = (id) => document.getElementById(id);
 const W = 1280, H = 920;
@@ -181,6 +182,7 @@ async function boot() {
   };
   const layers = setupLayers(bridge, ui);
   const presets = setupPresets(bridge, ui);
+  setupAbout(bridge);
   ui.showGroup = layers.showGroup;
   create = setupCreate(bridge, ui);
   const octave = (d) => { baseOct = Math.max(-1, Math.min(6, baseOct + d)); buildKeys(); layers.renderMini(); };

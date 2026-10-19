@@ -85,6 +85,8 @@ Native functions (JS calls C++):
 | `peaks` | layer id | `{ ok, file, meta, peaks: [[min, max] × 1000] }` for the waveform |
 | `previewFile` / `stopPreview` | path / — | plays a WAV through the output once (Create page "Play") |
 | `chooseFolder` | start folder | `{ ok, path }` |
+| `about` | — | `{ version, format }` for the About box |
+| `openUrl` | url | opens one of the About links (GitHub, source, mtyas.com, Ko-fi) in the system browser; any other URL is refused |
 
 In the browser preview, `bridge.js` keeps presets in localStorage; the other commands answer `{ reason: 'preview' }`.
 

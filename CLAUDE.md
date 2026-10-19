@@ -1,5 +1,7 @@
 # mtyaSampler — brief for Claude Code
 
+**Name and licence:** always written as one word, **mtyaSampler** (the header shows it as `mtya` + amber `Sampler`). Free software under **GPL-3.0-or-later** (`LICENSE`); JUCE is used under AGPLv3. The About box (click the logo, `ui/js/about.js`) links to github.com/mtyas, the repo, mtyas.com and ko-fi.com/mtyas. User docs: `docs/MANUAL.md` (screenshots in `docs/screenshots/`).
+
 A VST3 + CLAP **sampler instrument** with sound-design features and a serious multi-sample layer editor. The owner is Matt, a musician/sound designer on Windows. Keep explanations practical and in plain language.
 
 ## Current state (start here)

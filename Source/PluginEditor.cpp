@@ -317,6 +317,24 @@ juce::var MtyaSamplerEditor::handleCommand (const juce::String& name, const juce
         o->setProperty ("path", presets.path);
         return juce::var (o);
     }
+    if (name == "about")
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("version", JucePlugin_VersionString);
+        o->setProperty ("format", juce::AudioProcessor::getWrapperTypeDescription (proc.wrapperType));
+        return juce::var (o);
+    }
+    if (name == "openUrl")
+    {
+        // Only the About dialog's links: the page can't send the plugin anywhere else
+        static const juce::StringArray allowed { "https://github.com/mtyas", "https://github.com/mtyas/mtyaSampler",
+                                                 "https://mtyas.com", "https://ko-fi.com/mtyas" };
+        const auto url = args[0].toString();
+        if (! allowed.contains (url))
+            return result (false, "That link isn't allowed");
+        juce::URL (url).launchInDefaultBrowser();
+        return result (true);
+    }
     if (name == "presetReveal")
     {
         PresetManager::folder().createDirectory();

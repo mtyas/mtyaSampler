@@ -180,6 +180,7 @@ export async function createBridge() {
       case 'presetNext': return mockPresets.step(1);
       case 'presetInit': return mockPresets.init();
       case 'peaks': return { ok: false, meta: 'Preview: no audio files' };
+      case 'about': return { version: '0.1.0', format: 'Browser preview' };
       default: return { ok: false, reason: 'preview' };
     }
   }
@@ -218,6 +219,11 @@ export async function createBridge() {
     async command(name, ...args) {
       if (!inPlugin) return mockCommand(name, ...args);
       return native('command')(name, ...args);
+    },
+    // Opens a link in the system browser (the plugin only allows the About links)
+    async openUrl(url) {
+      if (inPlugin) return native('command')('openUrl', url);
+      window.open(url, '_blank', 'noopener');
     }
   };
 }
