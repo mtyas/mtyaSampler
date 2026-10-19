@@ -309,6 +309,7 @@ juce::var MtyaSamplerEditor::handleCommand (const juce::String& name, const juce
     if (name == "presetPrev")   return presets.step (-1);
     if (name == "presetNext")   return presets.step (1);
     if (name == "presetInit")   return presets.init();
+    if (name == "presetNew")    return presets.init (args[0].toString().trim().isNotEmpty() ? args[0].toString().trim() : juce::String ("New Instrument"));
     if (name == "presetCurrent")
     {
         auto* o = new juce::DynamicObject();
@@ -390,13 +391,50 @@ juce::var MtyaSamplerEditor::handleCommand (const juce::String& name, const juce
         return result (true, message);
     }
 
-    // ---- commands on one layer (args[0] = layer id) ----
+    // ---- auto start/end from the sound level: one sample, one layer, or every sample ----
+    if (name == "autoRegion")
+    {
+        // args: layer id (or none for "all"), variation (-1 = every variation), scope ("sample" | "layer" | "all"), threshold dB
+        const auto scope = args[2].toString();
+        const auto threshold = args.size() > 3 && ! args[3].isVoid() ? (float) (double) args[3] : -40.0f;
+        const int only = scope == "all" ? -1 : findLayer (inst, args[0]);
+        if (scope != "all" && only < 0)
+            return result (false, "Select a layer first");
+        int found = 0, missing = 0;
+        auto& layers = *inst["layers"].getArray();
+        for (int li = 0; li < layers.size(); ++li)
+        {
+            if (only >= 0 && li != only)
+                continue;
+            auto* entries = layers.getReference (li)["samples"].getArray();
+            if (entries == nullptr)
+                continue;
+            for (int vi = 0; vi < entries->size(); ++vi)
+            {
+                if (scope == "sample" && vi != (int) args[1])
+                    continue;
+                auto& entry = entries->getReference (vi);
+                const auto f = SampleTools::locate (SampleTools::fileOf (entry), inst["sampleFolder"].toString());
+                const auto audio = f.existsAsFile() ? SampleTools::read (f) : SampleTools::Audio();
+                if (! audio.ok()) { ++missing; continue; }
+                entry = SampleTools::withRegion (entry, SampleTools::findRegion (audio.buffer, audio.sampleRate, threshold));
+                ++found;
+            }
+        }
+        proc.setInstrumentJson (juce::JSON::toString (inst), true);
+        return result (found > 0, found == 0 ? juce::String ("No sample files found to analyse")
+                                             : "Found start and end for " + juce::String (found) + " sample" + (found == 1 ? "" : "s")
+                                                   + (missing > 0 ? " (" + juce::String (missing) + " not found)" : juce::String()));
+    }
+
+    // ---- commands on one layer (args[0] = layer id) and one of its samples (args[1] = variation, default 0) ----
     const int index = findLayer (inst, args[0]);
     if (index < 0)
         return result (false, "Select a layer first");
     auto& layer = inst["layers"].getArray()->getReference (index);
-    const auto* samples = layer["samples"].getArray();
-    const auto sampleName = samples != nullptr && ! samples->isEmpty() ? (*samples)[0].toString() : juce::String();
+    auto* samples = layer["samples"].getArray();
+    const int variation = samples != nullptr && ! samples->isEmpty() ? juce::jlimit (0, samples->size() - 1, args.size() > 1 ? (int) args[1] : 0) : 0;
+    const auto sampleName = samples != nullptr && ! samples->isEmpty() ? SampleTools::fileOf ((*samples)[variation]) : juce::String();
     const auto file = SampleTools::locate (sampleName, inst["sampleFolder"].toString());
 
     if (name == "peaks")
@@ -410,6 +448,7 @@ juce::var MtyaSamplerEditor::handleCommand (const juce::String& name, const juce
             if (audio.ok())
             {
                 o->setProperty ("peaks", SampleTools::peaks (audio.buffer));
+                o->setProperty ("seconds", audio.buffer.getNumSamples() / audio.sampleRate);
                 o->setProperty ("meta", juce::String (audio.sampleRate / 1000.0, 1) + " kHz · " + juce::String (audio.bitsPerSample) + "-bit · "
                                           + juce::String (audio.buffer.getNumSamples() / audio.sampleRate, 2) + " s"
                                           + (audio.buffer.getNumChannels() > 1 ? " · stereo" : " · mono"));
@@ -453,18 +492,10 @@ juce::var MtyaSamplerEditor::handleCommand (const juce::String& name, const juce
 
     if (name == "snapZero")
     {
-        // Move start, end and loop points to the nearest zero crossings of this layer's sample
-        const int len = audio.buffer.getNumSamples();
-        for (auto id : { "smp_start", "smp_end", "loop_start", "loop_end" })
-            if (auto* p = proc.apvts.getParameter (id))
-            {
-                auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p);
-                const auto percent = ranged->convertFrom0to1 (ranged->getValue());
-                const int at = SampleTools::nearestZeroCrossing (audio.buffer, (int) (percent * 0.01f * (float) len));
-                ranged->beginChangeGesture();
-                ranged->setValueNotifyingHost (ranged->convertTo0to1 (100.0f * (float) at / (float) len));
-                ranged->endChangeGesture();
-            }
+        // Move this sample's start, end and loop points to the nearest zero crossings
+        auto& entry = samples->getReference (variation);
+        entry = SampleTools::withRegion (entry, SampleTools::snapRegion (audio.buffer, SampleTools::regionOf (entry)));
+        proc.setInstrumentJson (juce::JSON::toString (inst), true);
         return result (true, "Snapped to zero crossings");
     }
 

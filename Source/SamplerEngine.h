@@ -84,6 +84,7 @@ private:
         const InstrumentMap* map = nullptr;
         const Layer* layer = nullptr;
         const SampleData* sample = nullptr;
+        const Layer::Region* region = nullptr;   // this variation's start/end/loop points
 
         int note = 60, velocity = 100;   // velocity after the curve
         juce::uint64 order = 0;          // start order, for "oldest"
@@ -131,7 +132,7 @@ private:
     struct BlockParams
     {
         PlayMode playMode = PlayMode::oneShot;
-        float start = 0, end = 1, loopStart = 0, loopEnd = 1, loopXfadeMs = 0;
+        float loopXfadeMs = 0;
         float tuneSemis = 0;             // tune + fine + pitch bend
         float grnPos = 0.5f, grnSizeMs = 80, grnDensity = 20, grnSpray = 0, grnPitchRnd = 0;
         bool grnFreeze = false;
@@ -145,7 +146,7 @@ private:
     // Indices of the parameters the engine reads (-1 when missing)
     struct Ix
     {
-        int playMode, start, end, loopStart, loopEnd, loopXfade, tune, fine;
+        int playMode, loopXfade, tune, fine;
         int grnPos, grnSize, grnDensity, grnSpray, grnPitchRnd, grnFreeze;
         int env1[4], env2[4], env3[4];
         int fltType, fltCutoff, fltReso, fltDrive, fltEnvAmt;

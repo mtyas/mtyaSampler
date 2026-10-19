@@ -7,6 +7,7 @@ import { setupFxChain } from './fxchain.js';
 import { setupModMatrix } from './modmatrix.js';
 import { setupPresets } from './presets.js';
 import { setupAbout } from './about.js';
+import { setupRegions } from './regions.js';
 
 const $ = (id) => document.getElementById(id);
 const W = 1280, H = 920;
@@ -164,25 +165,16 @@ async function boot() {
       else if (r && r.ok === false) toast(`“${name}” failed`);
       return r;
     },
-    // The selected layer changed (or its samples did): show its real waveform
-    layerChanged: (() => {
-      let lastKey = '';
-      return async (l) => {
-        const key = l ? l.id + '|' + (l.samples[0] || '') : '';
-        if (key === lastKey) return;
-        lastKey = key;
-        if (!l) return;
-        if (!bridge.inPlugin) return;   // the preview keeps its drawn waveform
-        const r = await bridge.command('peaks', l.id);
-        if (key !== lastKey || !r) return;
-        displays.setPeaks(r.peaks && r.peaks.length ? r.peaks : []);
-        if (r.meta) $('sel-file-meta').textContent = r.meta;
-      };
-    })()
+    // The selected layer changed (or its samples did): the sample editor follows it
+    layerChanged: (l) => { if (regions) regions.load(l); },
+    selectVariation: (i) => { if (regions) regions.select(i); }
   };
+  let regions = null;
   const layers = setupLayers(bridge, ui);
   const presets = setupPresets(bridge, ui);
   setupAbout(bridge);
+  regions = setupRegions(bridge, ui, displays);
+  regions.load(layers.current());
   ui.showGroup = layers.showGroup;
   create = setupCreate(bridge, ui);
   const octave = (d) => { baseOct = Math.max(-1, Math.min(6, baseOct + d)); buildKeys(); layers.renderMini(); };
@@ -190,12 +182,12 @@ async function boot() {
   $('oct-up').onclick = () => octave(1);
 
   // Commands that act on the selected layer get its id
-  const LAYER_COMMANDS = new Set(['snapZero', 'normalize', 'detectRoot', 'learnRange']);
+  const LAYER_COMMANDS = new Set(['snapZero', 'normalize', 'detectRoot', 'learnRange']);   // + the variation shown in the editor
   document.querySelectorAll('[data-action]').forEach((b) => b.addEventListener('click', () => {
     const a = b.dataset.action;
     if (layers.actions[a]) layers.actions[a]();
     else if (presets.actions[a]) presets.actions[a]();
-    else if (LAYER_COMMANDS.has(a)) ui.command(a, layers.current()?.id);
+    else if (LAYER_COMMANDS.has(a)) ui.command(a, layers.current()?.id, regions.variation());
     else ui.command(a);
   }));
 

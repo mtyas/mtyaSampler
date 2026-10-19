@@ -79,7 +79,7 @@ namespace
         void neutral()
         {
             const std::pair<const char*, float> v[] = {
-                { "play_mode", 0 }, { "smp_start", 0 }, { "smp_end", 100 }, { "loop_start", 20 }, { "loop_end", 80 }, { "loop_xfade", 10 },
+                { "play_mode", 0 }, { "loop_xfade", 10 },
                 { "tune", 0 }, { "fine", 0 }, { "grn_pos", 50 }, { "grn_size", 80 }, { "grn_density", 30 }, { "grn_spray", 10 },
                 { "grn_pitchrnd", 0 }, { "grn_freeze", 0 },
                 { "env1_attack", 0.001f }, { "env1_decay", 0.1f }, { "env1_sustain", 100 }, { "env1_release", 0.01f },
@@ -693,6 +693,42 @@ int main()
             if ((*ls)[i]["samples"].size() == 2) rrLayer = i;
         check (ls->size() == 4 && rrLayer >= 0 && (int) (*ls)[rrLayer]["vlo"] == 64 && (*ls)[rrLayer]["rrMode"].toString() == "cycle",
                "import makes one layer per note and dynamic, with round robins and velocity tiers (" + message + ")");
+    }
+
+    std::cout << "Per-sample start, end and loop points" << std::endl;
+    {
+        // Half a second of silence, then a 400 Hz tone: where each variation starts decides what you hear first
+        const auto gapTone = writeWav (dir, "gaptone.wav", hostRate, (int) hostRate,
+                                       [] (int i) { return i < 24000 ? 0.0f : 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * 400.0 * i / hostRate); });
+        const auto entry = [&] (double start) { return "{\"file\":" + path (gapTone) + ",\"start\":" + juce::String (start) + ",\"end\":1}"; };
+        Rig rig (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,\"rrMode\":\"cycle\",") + base
+                                      + ",\"samples\":[" + entry (0.5) + "," + entry (0.0) + "]") }));
+        rig.on (60); rig.run (0.2);
+        const auto first = rig.rms (0.01, 0.2);
+        rig.off (60); rig.run (0.05);
+        rig.on (60); rig.run (0.2);
+        const auto second = rig.rms (0.01, 0.2);
+        check (first > 0.2f && second < 1e-4f, "each round-robin variation has its own start (RR1 starts on the tone, RR2 in the silence)");
+
+        // Loop points per sample: RR1 loops early in the file, plain-name entries get the defaults
+        Rig loop (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":127,\"root\":60,") + base
+                                       + ",\"samples\":[{\"file\":" + path (gapTone) + ",\"start\":0.5,\"end\":1,\"loopStart\":0.6,\"loopEnd\":0.7}]") }));
+        loop.fp.set ("play_mode", 1);
+        loop.on (60); loop.run (2.0);
+        check (loop.rms (1.5, 2.0) > 0.2f && near (loop.hz (1.0, 2.0), 400, 4), "a sample's own loop points keep it sounding (loop inside the tone)");
+
+        const auto level = SampleTools::read (gapTone);
+        const auto r = SampleTools::findRegion (level.buffer, level.sampleRate);
+        check (near (r.start, 0.5, 0.005) && r.end > 0.99f && r.loopStart > r.start && r.loopEnd > r.loopStart && r.loopEnd <= r.end,
+               "auto-find puts the start where the sound begins (" + juce::String (r.start, 3) + ") and a loop inside it");
+        const auto tail = SampleTools::read (writeWav (dir, "tail.wav", hostRate, (int) hostRate,
+                                                  [] (int i) { return i > 4800 && i < 24000 ? 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * 300.0 * i / hostRate) : 0.0f; }));
+        const auto rt = SampleTools::findRegion (tail.buffer, tail.sampleRate);
+        check (near (rt.start, 0.1, 0.005) && near (rt.end, 0.51, 0.02), "and the end where it stops (" + juce::String (rt.start, 3) + " → " + juce::String (rt.end, 3) + ")");
+        const auto* data = tail.buffer.getReadPointer (0);
+        const auto frames = (float) tail.buffer.getNumSamples();
+        const int ls = (int) (rt.loopStart * frames), le = (int) (rt.loopEnd * frames);
+        check (data[ls - 1] < 0 && data[ls] >= 0 && data[le - 1] < 0 && data[le] >= 0, "loop points land on rising zero crossings");
     }
 
     std::cout << "Missing files and instrument edits" << std::endl;

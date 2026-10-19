@@ -50,13 +50,15 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 7. **The UI is a fixed 1280×920 design scaled to fit the window** (`fitToWindow` in main.js). The editor keeps that aspect ratio.
 
 8. **Engine parameters come from `params.json`** through `SamplerEngine::makeParamList` (the APVTS's values in the plugin, the tests' own in tests). The engine reads them by index; `engine.param(i)` includes macro/mod-wheel modulation, and the FX chain reads through it too.
-9. **Modulation routes and the FX order live in the instrument JSON** (`modRoutes`, `fxOrder`), not in parameters, so presets carry them and hosts don't see hundreds of extra parameters.
+9. **Sample points are per sample** (every round-robin variation too): `{ file, start, end, loopStart, loopEnd }` entries in `samples`, fractions of the file, read into `Layer::regions`. The UI edits them in `ui/js/regions.js` (knobs + draggable markers) and writes them back in the instrument; Auto S/E is `SampleTools::findRegion`.
+   **The clean Init** (`ui/clean-init.json`) is shared by Init and new Create-page instruments (`presetNew`).
+   **Modulation routes and the FX order live in the instrument JSON** (`modRoutes`, `fxOrder`), not in parameters, so presets carry them and hosts don't see hundreds of extra parameters.
 10. **Engine threading.** The loader thread parses the JSON and loads samples, then `SamplerEngine::publish` swaps the new map in through an atomic pointer. The audio thread keeps the old map in a `draining` slot until no voice points into it, then hands it back through a FIFO (`popRetired`) and the loader deletes it. Voices hold raw pointers into their map, so never free a map anywhere else.
 11. **One-shot means "play once, no loop"**: it still stops on key-up through the amp envelope (a piano needs that). Only release-trigger samples ignore note-off.
 
 ## Rules
 
-- **Never rename or remove a parameter id once it has shipped.** Hosts store automation and presets by id. Add new ids instead, and bump the `ParameterID` version if the meaning changes.
+- **Never rename or remove a parameter id once it has shipped.** (Before the first release, `smp_start`, `smp_end`, `loop_start` and `loop_end` were removed when the points became per sample.) Hosts store automation and presets by id. Add new ids instead, and bump the `ParameterID` version if the meaning changes.
 - **Adding a parameter takes three steps:**
   1. Add it to `params.json`.
   2. Use it in the DSP (`apvts.getRawParameterValue`).

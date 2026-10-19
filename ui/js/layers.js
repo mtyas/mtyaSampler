@@ -23,6 +23,10 @@ const KEY_LO = 24, KEY_SPAN = 96;   // map shows C0..B7
 const rnd = (i, k) => Math.abs(Math.sin(i * k) * 43758.5453) % 1;
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
+// A "samples" entry is a file name or { file, start, end, loopStart, loopEnd }
+export const fileOf = (entry) => (entry && typeof entry === 'object' ? entry.file : entry) || '';
+export const baseName = (entry) => String(fileOf(entry)).split(/[\\/]/).pop();
+
 export function setupLayers(bridge, ui) {
   let inst = bridge.getInstrument();
   let sel = Math.min(4, inst.layers.length - 1);
@@ -62,9 +66,9 @@ export function setupLayers(bridge, ui) {
       list.appendChild(row);
     });
     const l = cur();
-    $('sel-file').textContent = l ? (String(l.samples[0] || l.name).split(/[\\/]/).pop()) : '—';
-    if (ui.layerChanged) ui.layerChanged(l);
+    if (ui.layerChanged) ui.layerChanged(l);   // the sample editor shows this layer (file name, waveform, points)
     $('sel-root').textContent = l ? noteName(l.root) : '—';
+    if (!l) { $('zone-z').style.width = '0'; $('zone-r').style.left = '-10%'; return; }   // an empty instrument (e.g. a fresh Init)
     // zone bar spans the on-screen keyboard (ui.kbdRange)
     const [k0, k1] = ui.kbdRange();
     const span = k1 - k0 + 1;
@@ -258,7 +262,11 @@ export function setupLayers(bridge, ui) {
       d.className = 'rrslot' + (r === rrPos % n ? ' on' : '');
       d.innerHTML = `<div class="top-line"><b>RR ${r + 1}</b>${r === rrPos % n ? '<span class="last">last played</span>' : ''}</div>` +
         `<svg viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><path d="${miniWave(sel * 7 + r)}"/></svg><span class="meta"></span>`;
-      d.querySelector('.meta').textContent = file;
+      d.querySelector('.meta').textContent = baseName(file);
+      // Click a variation to edit its start, end and loop points on the Main page
+      d.title = 'Edit RR ' + (r + 1) + "'s points on the Main page";
+      d.style.cursor = 'pointer';
+      d.onclick = () => { if (ui.selectVariation) ui.selectVariation(r); };
       g.appendChild(d);
     });
   }

@@ -20,7 +20,9 @@ public:
     juce::var save (const juce::String& name, const juce::String& category);   // { ok, message }
     juce::var load (const juce::File&);                                       // { ok, message }
     juce::var step (int delta);                                               // previous / next in the list
-    juce::var init();                                                          // default parameters + the demo instrument
+    // The clean starting point (ui/clean-init.json): no effects, no modulation, no layers.
+    // `newName` names the new, not yet saved, sound ("Init" by default). The result carries the instrument JSON.
+    juce::var init (const juce::String& newName = "Init");
 
     // What the header shows. Saved with the plugin state.
     juce::String name { "Init" }, category;

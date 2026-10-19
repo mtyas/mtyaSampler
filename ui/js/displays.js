@@ -37,12 +37,20 @@ export function setupDisplays(bridge) {
   const on = (ids, fn) => { ids.forEach((id) => P(id).onChange(fn)); fn(); };
 
   // ---------- waveform ----------
+  // The markers show the selected sample's own points (fractions 0–1), set with setRegion().
+  let region = { start: 0, end: 1, loopStart: 0.3, loopEnd: 0.8 };
   $('w-path').setAttribute('d', wavePath());
-  $('ruler').innerHTML = ['0.0s', '0.8s', '1.6s', '2.4s', '3.2s', '4.0s', '4.8s'].map((t) => `<span>${t}</span>`).join('');
+  const setDuration = (sec) => {
+    $('ruler').innerHTML = [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const t = sec * i / 6;
+      return `<span>${sec >= 10 ? t.toFixed(0) : t.toFixed(t < 1 && sec < 2 ? 2 : 1)}s</span>`;
+    }).join('');
+  };
+  setDuration(4.8);
   let slices = '';
   const drawWave = () => {
-    const s = val('smp_start') * 10, e = Math.max(s, val('smp_end') * 10);
-    const ls = val('loop_start') * 10, le = Math.max(ls, val('loop_end') * 10);
+    const s = region.start * 1000, e = Math.max(s, region.end * 1000);
+    const ls = region.loopStart * 1000, le = Math.max(ls, region.loopEnd * 1000);
     const mode = val('play_mode');          // 0 one-shot 1 loop 2 ping-pong 3 slice 4 granular
     const loop = mode === 1 || mode === 2;
     $('w-pre').setAttribute('width', s);
@@ -54,7 +62,7 @@ export function setupDisplays(bridge) {
     slices = '';
     if (mode === 3) for (let i = 1; i < 16; i++) { const x = (s + i * (e - s) / 16).toFixed(1); slices += `M${x} 0 V200 `; }
     $('w-slices').setAttribute('d', slices);
-    const gp = val('grn_pos') * 10, gw = 20 + val('grn_spray') * 2.4;
+    const gp = s + val('grn_pos') / 100 * (e - s), gw = 20 + val('grn_spray') * 2.4 * (e - s) / 1000;   // inside the start–end range, like the engine
     $('w-grain').style.display = mode === 4 ? '' : 'none';
     $('w-grain-win').setAttribute('x', gp - gw / 2); $('w-grain-win').setAttribute('width', gw);
     let g = '';
@@ -65,12 +73,16 @@ export function setupDisplays(bridge) {
       g += `M${x} ${y.toFixed(1)} L${x} ${(y + len).toFixed(1)} `;
     }
     $('w-grains').setAttribute('d', g);
-    const place = (id, x, show = true) => { const m = $(id); m.style.left = (x / 10) + '%'; m.hidden = !show; };
+    // Markers sit centred on their line, but stay inside the waveform at the very edges
+    const place = (id, x, show = true) => {
+      const m = $(id); m.style.left = (x / 10) + '%'; m.hidden = !show;
+      m.style.transform = x < 15 ? 'translateX(0)' : x > 985 ? 'translateX(-100%)' : '';
+    };
     place('m-s', s); place('m-e', e); place('m-l1', ls, loop); place('m-l2', le, loop);
     const mg = $('m-g'); mg.hidden = mode !== 4; mg.style.left = Math.min(80, (gp + gw / 2) / 10 + 0.5) + '%';
     mg.textContent = 'Grain · pos ' + val('grn_pos').toFixed(1) + '%';
   };
-  on(['smp_start', 'smp_end', 'loop_start', 'loop_end', 'play_mode', 'grn_pos', 'grn_spray', 'grn_density', 'grn_size'], drawWave);
+  on(['play_mode', 'grn_pos', 'grn_spray', 'grn_density', 'grn_size'], drawWave);
 
   // ---------- grain cloud ----------
   $('g-wave').setAttribute('d', wavePath(130, 260, 32, 30, 30, 7.13));
@@ -155,6 +167,9 @@ export function setupDisplays(bridge) {
   return {
     setEnv(n) { envN = n; drawEnv(); },
     setLfo(n) { lfoN = n; drawLfo(); },
-    setPeaks(peaks) { $('w-path').setAttribute('d', peaksPath(peaks)); }
+    setPeaks(peaks) { $('w-path').setAttribute('d', peaks && peaks.length ? peaksPath(peaks) : ''); },
+    setPlaceholderWave() { $('w-path').setAttribute('d', wavePath()); },
+    setRegion(r) { region = { ...r }; drawWave(); },
+    setDuration
   };
 }

@@ -62,8 +62,7 @@ SamplerEngine::SamplerEngine (ParamList p) : params (std::move (p))
     paramOffset.assign (params.size(), 0.0f);
 
     auto i = [this] (const juce::String& id) { return ids.indexOf (id); };
-    ix.playMode = i ("play_mode");     ix.start = i ("smp_start");       ix.end = i ("smp_end");
-    ix.loopStart = i ("loop_start");   ix.loopEnd = i ("loop_end");      ix.loopXfade = i ("loop_xfade");
+    ix.playMode = i ("play_mode");     ix.loopXfade = i ("loop_xfade");
     ix.tune = i ("tune");              ix.fine = i ("fine");
     ix.grnPos = i ("grn_pos");         ix.grnSize = i ("grn_size");      ix.grnDensity = i ("grn_density");
     ix.grnSpray = i ("grn_spray");     ix.grnPitchRnd = i ("grn_pitchrnd"); ix.grnFreeze = i ("grn_freeze");
@@ -196,10 +195,6 @@ void SamplerEngine::readBlockParams()
 
     auto get = [this] (int i, float fallback) { return param (i, fallback); };
     bp.playMode    = (PlayMode) juce::jlimit (0, 4, juce::roundToInt (get (ix.playMode, 0)));
-    bp.start       = get (ix.start, 0) * 0.01f;
-    bp.end         = get (ix.end, 100) * 0.01f;
-    bp.loopStart   = get (ix.loopStart, 0) * 0.01f;
-    bp.loopEnd     = get (ix.loopEnd, 100) * 0.01f;
     bp.loopXfadeMs = get (ix.loopXfade, 0);
     bp.tuneSemis   = get (ix.tune, 0) + get (ix.fine, 0) * 0.01f + pitchBendSemis;
     bp.grnPos      = get (ix.grnPos, 50) * 0.01f;
@@ -610,7 +605,9 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
     v.map = &srcMap;
     ++srcMap.voiceRefs;
     v.layer = &layer;
-    v.sample = layer.samples[(size_t) juce::jlimit (0, (int) layer.samples.size() - 1, variation)].get();
+    const auto which = (size_t) juce::jlimit (0, (int) layer.samples.size() - 1, variation);
+    v.sample = layer.samples[which].get();
+    v.region = &layer.regions[which];
     v.note = note;
     v.velocity = velocity;
     v.order = ++voiceOrder;
@@ -693,8 +690,10 @@ void SamplerEngine::freeVoice (Voice& v)
 void SamplerEngine::updateRegion (Voice& v) const
 {
     const auto len = (double) v.sample->audio.getNumSamples();
-    auto s = juce::jlimit (0.0, len, (double) bp.start * len);
-    auto e = juce::jlimit (0.0, len, (double) bp.end * len);
+    // Each sample (and round-robin variation) has its own points
+    const auto& r = *v.region;
+    auto s = juce::jlimit (0.0, len, (double) r.start * len);
+    auto e = juce::jlimit (0.0, len, (double) r.end * len);
     if (e < s)
         std::swap (s, e);
     if (e - s < 16.0)
@@ -713,8 +712,8 @@ void SamplerEngine::updateRegion (Voice& v) const
     }
 
     // Loop points sit inside the start/end region.
-    auto ls = juce::jlimit (s, e, (double) bp.loopStart * len);
-    auto le = juce::jlimit (s, e, (double) bp.loopEnd * len);
+    auto ls = juce::jlimit (s, e, (double) r.loopStart * len);
+    auto le = juce::jlimit (s, e, (double) r.loopEnd * len);
     if (le < ls)
         std::swap (ls, le);
     v.loopStart = ls;

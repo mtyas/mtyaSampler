@@ -130,16 +130,23 @@ juce::var PresetManager::step (int delta)
     return load (juce::File ((*items)[next]["path"].toString()));
 }
 
-juce::var PresetManager::init()
+juce::var PresetManager::init (const juce::String& newName)
 {
+    const auto clean = juce::JSON::parse (UiResources::getText ("clean-init.json"));
+    const auto& values = clean["params"];
     for (auto* p : proc.getParameters())
         if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
         {
+            const auto& v = values[juce::Identifier (ranged->getParameterID())];
             ranged->beginChangeGesture();
-            ranged->setValueNotifyingHost (ranged->getDefaultValue());
+            ranged->setValueNotifyingHost (v.isVoid() ? ranged->getDefaultValue() : ranged->convertTo0to1 ((float) (double) v));
             ranged->endChangeGesture();
         }
-    proc.setInstrumentJson (UiResources::getText ("demo-layers.json"), true);
-    setCurrent ("Init", {}, {});
-    return result (true, "Back to the Init sound");
+    const auto instrument = juce::JSON::toString (clean["instrument"]);
+    proc.setInstrumentJson (instrument, true);
+    setCurrent (newName.isNotEmpty() ? newName : juce::String ("Init"), {}, {});
+
+    auto r = result (true, newName == "Init" ? juce::String ("Clean Init sound: no effects, no layers") : "New instrument “" + newName + "”");
+    r.getDynamicObject()->setProperty ("instrument", instrument);
+    return r;
 }

@@ -219,6 +219,27 @@ juce::var defaultModRoutes()
     ])");
 }
 
+static Layer::Region parseRegion (const juce::var& entry)
+{
+    Layer::Region r;
+    if (! entry.isObject())
+        return r;
+    auto f = [&entry] (const char* key, float fallback)
+    {
+        const auto& v = entry[key];
+        return v.isVoid() ? fallback : juce::jlimit (0.0f, 1.0f, (float) (double) v);
+    };
+    r.start = f ("start", r.start);
+    r.end = f ("end", r.end);
+    if (r.end < r.start)
+        std::swap (r.start, r.end);
+    r.loopStart = juce::jlimit (r.start, r.end, f ("loopStart", r.loopStart));
+    r.loopEnd = juce::jlimit (r.start, r.end, f ("loopEnd", r.loopEnd));
+    if (r.loopEnd < r.loopStart)
+        std::swap (r.loopStart, r.loopEnd);
+    return r;
+}
+
 static void parseRoutes (const juce::var& list, const juce::StringArray& paramIds, std::vector<ModRoute>& out)
 {
     const auto* routes = list.getArray();
@@ -331,11 +352,18 @@ std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, Sample
             map->rrGroupSizes.push_back (0);
         }
 
-        if (const auto* names = l["samples"].getArray())
-            for (const auto& n : *names)
-                layer.samples.push_back (cache.get (n.toString(), extraFolder, layer.root));
+        // Each entry is a file name, or { "file", "start", "end", "loopStart", "loopEnd" } (fractions 0–1)
+        if (const auto* entries = l["samples"].getArray())
+            for (const auto& e : *entries)
+            {
+                layer.samples.push_back (cache.get (e.isObject() ? e["file"].toString() : e.toString(), extraFolder, layer.root));
+                layer.regions.push_back (parseRegion (e));
+            }
         if (layer.samples.empty())
+        {
             layer.samples.push_back (cache.get ({}, extraFolder, layer.root));
+            layer.regions.push_back ({});
+        }
 
         for (const auto& s : layer.samples)
             ++(s->missing ? map->missingSamples : map->loadedSamples);

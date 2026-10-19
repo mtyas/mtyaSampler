@@ -84,8 +84,10 @@ function aria(el, p) {
   el.setAttribute('aria-valuetext', fmt(p.spec, v));
 }
 
+// `id` is a parameter id, or an object with the same interface (getValue, setValue, getNorm, setNorm,
+// begin, end, onChange, spec), e.g. a sample's own start point (js/regions.js).
 export function knob(bridge, id, color) {
-  const p = bridge.param(id);
+  const p = typeof id === 'object' ? id : bridge.param(id);
   const s = p.spec;
   const root = document.createElement('div');
   root.className = 'knob' + (color === 'mod' ? ' mod' : '');

@@ -41,6 +41,14 @@ struct Layer
     int rrGroup = 0;                        // index into InstrumentMap::rrGroupSizes
     std::vector<SamplePtr> samples;         // one per round-robin variation; never empty
 
+    // Where each variation plays, as fractions of its file (from the sample's entry in the JSON)
+    struct Region
+    {
+        float start = 0.0f, end = 1.0f;
+        float loopStart = 0.3f, loopEnd = 0.8f;
+    };
+    std::vector<Region> regions;            // same size as `samples`
+
     float gain = 1.0f;                      // from volume dB
     float panL = 1.0f, panR = 1.0f;         // balance law, centre = unity
     int output = 0;                         // 0 = Main (multi-out comes later)

@@ -152,7 +152,8 @@ if(MTYA_BUILD_TESTS)
     target_sources(mtyaPluginTests PRIVATE tests/PluginTests.cpp)
     # Same headers and defines as the plugin's shared code, which it links against
     target_include_directories(mtyaPluginTests PRIVATE $<TARGET_PROPERTY:mtyaSampler,INCLUDE_DIRECTORIES>)
-    target_compile_definitions(mtyaPluginTests PRIVATE
-        $<FILTER:$<TARGET_PROPERTY:mtyaSampler,COMPILE_DEFINITIONS>,EXCLUDE,^JUCE_STANDALONE_APPLICATION>)
+    target_compile_definitions(mtyaPluginTests PRIVATE $<TARGET_PROPERTY:mtyaSampler,COMPILE_DEFINITIONS>)
+    # The console app and the plugin's shared code both define JUCE_STANDALONE_APPLICATION; harmless here
+    target_compile_options(mtyaPluginTests PRIVATE $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-macro-redefined>)
     target_link_libraries(mtyaPluginTests PRIVATE mtyaSampler)
 endif()

@@ -161,6 +161,18 @@ int main()
         dir.deleteRecursively();
     }
 
+    std::cout << "Clean Init / new instrument" << std::endl;
+    {
+        const auto r = p.presets.init ("My Synth");
+        const auto fresh = juce::JSON::parse (p.getInstrumentJson());
+        auto isOn = [&p] (const char* id) { return p.apvts.getRawParameterValue (id)->load() >= 0.5f; };
+        check ((bool) r["ok"] && p.presets.name == "My Synth" && p.presets.path.isEmpty(), "a new instrument is named after the session and isn't saved yet");
+        check (! isOn ("fx_sat_on") && ! isOn ("fx_crush_on") && ! isOn ("fx_chorus_on") && ! isOn ("fx_delay_on") && ! isOn ("fx_reverb_on"), "it has no effects on");
+        check (fresh["layers"].size() == 0 && fresh["modRoutes"].isArray() && fresh["modRoutes"].size() == 0, "no layers and no modulation routes");
+        check (p.apvts.getRawParameterValue ("flt_cutoff")->load() > 19000.0f && p.apvts.getRawParameterValue ("lfo1_depth")->load() == 0.0f
+                 && p.apvts.getRawParameterValue ("macro1")->load() == 0.0f, "filter open, LFOs and macros at zero");
+    }
+
     p.releaseResources();
     std::cout << (failures == 0 ? "All checks passed" : juce::String (failures) + " check(s) failed") << std::endl;
     return failures == 0 ? 0 : 1;

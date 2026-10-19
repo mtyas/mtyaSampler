@@ -50,7 +50,8 @@ export function setupCreate(bridge, ui) {
   const segs = {
     step: STEPS,
     order: [['note', 'By note'], ['passes', 'RR passes']],
-    direction: [['up', 'Low → high'], ['down', 'High → low']]
+    direction: [['up', 'Low → high'], ['down', 'High → low']],
+    startFrom: [['new', 'New instrument (clean Init)'], ['add', 'Add to current']]
   };
   document.querySelectorAll('#page-create [data-seg]').forEach((el) => {
     const key = el.dataset.seg;
@@ -146,10 +147,15 @@ export function setupCreate(bridge, ui) {
     status = Array(plan.takes.length).fill('');
     recent = [];
     renderRecent();
-    // add (empty) layers for this session to the instrument
-    const inst = clone(bridge.getInstrument());
-    if (s.replace) inst.layers = [];
-    else inst.layers = inst.layers.filter((l) => l.group !== s.name);
+    // A new instrument starts from the clean Init (no effects, no modulation, no layers);
+    // otherwise the session's (empty) layers are added to the current one.
+    let inst = clone(bridge.getInstrument());
+    if (s.startFrom !== 'add') {
+      const r = await bridge.command('presetNew', s.name);
+      if (r && r.instrument) inst = JSON.parse(r.instrument);
+      else inst.layers = [];
+    }
+    inst.layers = inst.layers.filter((l) => l.group !== s.name);
     inst.layers.push(...layersForPlan(plan));
     await bridge.setInstrument(inst);
     plan.layerIds = inst.layers.filter((l) => l.group === s.name).map((l) => l.id);

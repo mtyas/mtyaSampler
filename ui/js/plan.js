@@ -10,7 +10,7 @@ export const DEFAULTS = {
   order: 'note', direction: 'up',
   countBeats: 3, bpm: 90, toneSec: 1.5, tone: true, voice: true, autoAdvance: true,
   input: 'stereo', thresholdDb: -42, silenceMs: 900, prerollMs: 20, fadeMs: 60, normalize: 'session',
-  monitor: false, replace: false, folder: '',
+  monitor: false, startFrom: 'new', folder: '',   // 'new' = clean Init instrument, 'add' = add to the current one
   // Auto-sampling: play each note out of the plugin's MIDI output (hardware synths, other plugins)
   midi: false, midiChannel: 1, holdSec: 2, gapSec: 0.5
 };

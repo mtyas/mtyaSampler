@@ -150,6 +150,120 @@ namespace SampleTools
         return position;
     }
 
+    int nearestRisingZeroCrossing (const juce::AudioBuffer<float>& b, int position)
+    {
+        const int n = b.getNumSamples();
+        if (n < 2)
+            return 0;
+        position = juce::jlimit (1, n - 1, position);
+        const auto* d = b.getReadPointer (0);
+        auto rising = [d] (int i) { return d[i - 1] < 0.0f && d[i] >= 0.0f; };
+        const int reach = juce::jmin (n, 4800);   // within ~0.1 s; otherwise keep the position
+        for (int off = 0; off < reach; ++off)
+        {
+            if (position - off >= 1 && rising (position - off)) return position - off;
+            if (position + off < n && rising (position + off)) return position + off;
+        }
+        return position;
+    }
+
+    Layer::Region findRegion (const juce::AudioBuffer<float>& b, double sr, float thresholdDb)
+    {
+        Layer::Region r;
+        const int n = b.getNumSamples();
+        if (n < 16)
+            return r;
+        auto level = [&b] (int i)
+        {
+            float a = 0;
+            for (int ch = 0; ch < b.getNumChannels(); ++ch)
+                a = juce::jmax (a, std::abs (b.getSample (ch, i)));
+            return a;
+        };
+        float peak = 0;
+        int peakAt = 0;
+        for (int i = 0; i < n; ++i)
+            if (const auto a = level (i); a > peak) { peak = a; peakAt = i; }
+        if (peak <= 0.0f)
+            return r;
+
+        const auto startThreshold = peak * juce::Decibels::decibelsToGain (thresholdDb);
+        const auto endThreshold = peak * juce::Decibels::decibelsToGain (thresholdDb - 20.0f);
+        int first = 0, last = n - 1;
+        while (first < n - 1 && level (first) < startThreshold) ++first;
+        while (last > first && level (last) < endThreshold) --last;
+
+        int start = juce::jmax (0, first - (int) (0.002 * sr));
+        start = juce::jmin (nearestZeroCrossing (b, start), first);
+        int end = juce::jmin (n - 1, last + (int) (0.01 * sr));
+        end = juce::jmax (nearestZeroCrossing (b, end), last);
+        if (end <= start)
+            end = n - 1;
+
+        // Loop in the steady part: after the attack peak, between 35 % and 85 % of the sound
+        const int active = end - start;
+        int ls = juce::jmax (start + (int) (0.35 * active), juce::jmin (peakAt, start + active / 2) + (int) (0.05 * sr));
+        int le = start + (int) (0.85 * active);
+        if (le - ls < (int) (0.05 * sr))
+        {
+            ls = start + (int) (0.4 * active);
+            le = start + (int) (0.85 * active);
+        }
+        ls = nearestRisingZeroCrossing (b, ls);
+        le = nearestRisingZeroCrossing (b, le);
+        if (le <= ls)
+            le = juce::jmin (end, ls + juce::jmax (32, active / 4));
+
+        const auto len = (float) n;
+        r.start = (float) start / len;
+        r.end = (float) end / len;
+        r.loopStart = juce::jlimit (r.start, r.end, (float) ls / len);
+        r.loopEnd = juce::jlimit (r.loopStart, r.end, (float) le / len);
+        return r;
+    }
+
+    Layer::Region snapRegion (const juce::AudioBuffer<float>& b, const Layer::Region& in)
+    {
+        const auto len = (float) b.getNumSamples();
+        auto at = [len] (float f) { return (int) (f * len); };
+        Layer::Region r = in;
+        r.start = (float) nearestZeroCrossing (b, at (in.start)) / len;
+        r.end = juce::jmax (r.start, (float) nearestZeroCrossing (b, at (in.end)) / len);
+        r.loopStart = juce::jlimit (r.start, r.end, (float) nearestRisingZeroCrossing (b, at (in.loopStart)) / len);
+        r.loopEnd = juce::jlimit (r.loopStart, r.end, (float) nearestRisingZeroCrossing (b, at (in.loopEnd)) / len);
+        return r;
+    }
+
+    juce::String fileOf (const juce::var& entry)
+    {
+        return entry.isObject() ? entry["file"].toString() : entry.toString();
+    }
+
+    Layer::Region regionOf (const juce::var& entry)
+    {
+        Layer::Region r;
+        if (! entry.isObject())
+            return r;
+        auto f = [&entry] (const char* k, float fallback) { return entry[k].isVoid() ? fallback : (float) (double) entry[k]; };
+        r.start = f ("start", r.start);
+        r.end = f ("end", r.end);
+        r.loopStart = f ("loopStart", r.loopStart);
+        r.loopEnd = f ("loopEnd", r.loopEnd);
+        return r;
+    }
+
+    juce::var withRegion (const juce::var& entry, const Layer::Region& r)
+    {
+        auto round6 = [] (float x) { return std::round ((double) x * 1.0e6) / 1.0e6; };
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("file", fileOf (entry));
+        o->setProperty ("start", round6 (r.start));
+        o->setProperty ("end", round6 (r.end));
+        o->setProperty ("loopStart", round6 (r.loopStart));
+        o->setProperty ("loopEnd", round6 (r.loopEnd));
+        return juce::var (o);
+    }
+
     juce::String noteName (int note)
     {
         static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
@@ -309,7 +423,7 @@ namespace SampleTools
             const auto* samples = l["samples"].getArray();
             if (samples == nullptr || samples->isEmpty())
                 continue;
-            const auto info = parseName ((*samples)[0].toString());
+            const auto info = parseName (fileOf ((*samples)[0]));
             if (info.note < 0)
                 continue;
             set (l, "root", info.note);
@@ -384,7 +498,12 @@ namespace SampleTools
             for (const auto& [rr, f] : list)
             {
                 juce::ignoreUnused (rr);
-                samples.add (f.getFullPathName());
+                // Start/end found from the sound level (skipped for very large imports, which would take a while)
+                juce::var entry (f.getFullPathName());
+                if (files.size() <= 300)
+                    if (const auto audio = read (f); audio.ok())
+                        entry = withRegion (entry, findRegion (audio.buffer, audio.sampleRate));
+                samples.add (entry);
             }
             const bool hasNote = key.note >= 0;
             const int root = hasNote ? key.note : juce::jmin (127, drumKey++);

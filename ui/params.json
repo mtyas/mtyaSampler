@@ -5,10 +5,6 @@
     { "id": "master_vol", "name": "Master Volume", "label": "Master", "type": "float", "min": 0, "max": 100, "default": 72, "unit": "%", "group": "Master" },
 
     { "id": "play_mode", "name": "Playback Mode", "type": "choice", "choices": ["One-shot", "Loop", "Ping-pong", "Slice", "Granular"], "default": 4, "group": "Sample" },
-    { "id": "smp_start", "name": "Sample Start", "label": "Start", "type": "float", "min": 0, "max": 100, "default": 8, "unit": "%", "decimals": 1, "group": "Sample" },
-    { "id": "smp_end", "name": "Sample End", "label": "End", "type": "float", "min": 0, "max": 100, "default": 86, "unit": "%", "decimals": 1, "group": "Sample" },
-    { "id": "loop_start", "name": "Loop Start", "label": "Loop In", "type": "float", "min": 0, "max": 100, "default": 34, "unit": "%", "decimals": 1, "group": "Sample" },
-    { "id": "loop_end", "name": "Loop End", "label": "Loop Out", "type": "float", "min": 0, "max": 100, "default": 72, "unit": "%", "decimals": 1, "group": "Sample" },
     { "id": "loop_xfade", "name": "Loop Crossfade", "label": "X-Fade", "type": "float", "min": 0, "max": 500, "default": 22, "skew": 0.4, "unit": "ms", "group": "Sample" },
     { "id": "tune", "name": "Tune", "type": "float", "min": -24, "max": 24, "step": 1, "default": 0, "unit": "st", "bipolar": true, "group": "Sample" },
     { "id": "fine", "name": "Fine Tune", "label": "Fine", "type": "float", "min": -100, "max": 100, "step": 1, "default": 12, "unit": "ct", "bipolar": true, "group": "Sample" },

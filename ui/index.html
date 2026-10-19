@@ -46,6 +46,7 @@
         <div class="ph-left" style="align-items:baseline;gap:12px">
           <h2 class="file" id="sel-file">—</h2>
           <span class="meta" id="sel-file-meta">44.1 kHz · 24-bit · 4.82 s</span>
+          <div class="seg mono rr-pick" role="group" aria-label="Round-robin variation to edit" id="rr-pick" hidden></div>
         </div>
         <div class="seg lg" role="group" aria-label="Playback mode" data-choice="play_mode"></div>
       </div>
@@ -69,11 +70,11 @@
       </div>
       <div class="ruler" aria-hidden="true" id="ruler"></div>
       <div class="editor-foot">
-        <div class="knobs tight" data-knobs="smp_start,smp_end,loop_start,loop_end,loop_xfade,tune,fine"></div>
+        <div class="knobs tight" id="editor-knobs" data-knobs="loop_xfade,tune,fine"></div>
         <div style="display:flex;gap:8px">
           <div class="statbox"><span>Root</span><span id="sel-root">C3</span></div>
-          <div class="statbox"><span>Slices</span><span>16</span></div>
-          <button class="btn" data-action="snapZero">Snap 0×</button>
+          <button class="btn" id="auto-points" data-keep-pop title="Find start and end from the sound level">Auto S/E</button>
+          <button class="btn" data-action="snapZero" title="Move this sample's points to zero crossings">Snap 0×</button>
           <button class="btn" data-action="normalize">Normalize</button>
         </div>
       </div>
@@ -310,8 +311,9 @@
           </div>
           <div class="checks">
             <label class="check"><input type="checkbox" data-key="monitor"> Hear the input</label>
-            <label class="check"><input type="checkbox" data-key="replace"> Replace current instrument</label>
+
           </div>
+          <div class="field"><label id="c-from-l">Start from</label><div class="seg fill" role="group" aria-labelledby="c-from-l" data-seg="startFrom"></div></div>
           <div class="field"><label for="c-folder">Save samples to</label><div class="folder"><input id="c-folder" data-key="folder" data-kind="text" spellcheck="false"><button type="button" class="btn" id="choose-folder">Choose…</button></div></div>
         </div>
       </fieldset>

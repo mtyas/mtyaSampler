@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_formats/juce_audio_formats.h>
+#include "InstrumentMap.h"
 
 // Sample analysis and instrument-editing helpers for the native commands (message thread):
 // finding files, waveform peaks, root-pitch detection, zero crossings, and the "auto-map by
@@ -28,6 +29,19 @@ namespace SampleTools
 
     // The nearest sample index to `position` where the signal crosses zero.
     int nearestZeroCrossing (const juce::AudioBuffer<float>&, int position);
+    // Same, but only rising crossings (so two loop points have the same slope).
+    int nearestRisingZeroCrossing (const juce::AudioBuffer<float>&, int position);
+
+    // Start/end points from the sound level, and a loop in the steady part after the attack.
+    // Start: where the level first passes `thresholdDb` below the peak (minus 2 ms).
+    // End: where it last passes 20 dB lower than that (plus 10 ms). All on zero crossings.
+    Layer::Region findRegion (const juce::AudioBuffer<float>&, double sampleRate, float thresholdDb = -40.0f);
+    Layer::Region snapRegion (const juce::AudioBuffer<float>&, const Layer::Region&);
+
+    // A layer's "samples" entry is a file name or { file, start, end, loopStart, loopEnd }
+    juce::String fileOf (const juce::var& entry);
+    Layer::Region regionOf (const juce::var& entry);
+    juce::var withRegion (const juce::var& entry, const Layer::Region&);
 
     // What a file name says about a sample, e.g. "Piano_C#3_mf_rr2.wav" or "My_Guitar_Ds2_f_rr1.wav"
     struct NameInfo

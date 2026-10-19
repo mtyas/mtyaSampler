@@ -35,13 +35,25 @@ mtyaSampler is a sampler with three pages: **Main** (play and shape the sound), 
 
 ### Sample editor and playback modes
 
-The waveform shows the selected layer's first sample, with these markers:
+The waveform shows the selected layer's sample, with these markers:
 
 - **S** and **E**: where playback starts and ends.
-- **L**: the loop points.
+- **L**: the loop points (shown in Loop and Ping-pong modes).
 - Slice lines, or the grain window, depending on the mode.
 
-The knobs underneath set **Start**, **End**, **Loop In**, **Loop Out**, **X-Fade** (the loop crossfade), **Tune** (semitones) and **Fine** (cents). They apply to every layer.
+**Every sample has its own points**, including each round-robin variation. When a layer has variations, **RR1, RR2…** next to the file name choose which one you're editing. You can also click a variation on the Layers page.
+
+Edit the points by **dragging the S, E and L lines on the waveform**, or with the **Start**, **End**, **Loop In** and **Loop Out** knobs. The points stay in order: the loop always sits between start and end. **X-Fade** (the loop crossfade), **Tune** (semitones) and **Fine** (cents) apply to the whole instrument.
+
+**Auto S/E** finds the points from the sound level:
+
+- **Start**: where the sound rises above the threshold, which is set relative to its peak (−40 dB by default), keeping 2 ms before it.
+- **End**: where it last falls 20 dB below that threshold, plus 10 ms.
+- **Loop**: placed in the steady part after the attack.
+
+All of them land on zero crossings. Run it on **this sample**, the **whole layer** or **every sample**. Imported files get it automatically.
+
+![Auto start and end](screenshots/auto-points.png)
 
 Choose how samples play with the switch at the top right:
 
@@ -55,7 +67,7 @@ Choose how samples play with the switch at the top right:
 
 The buttons next to the knobs:
 
-- **Snap 0×** moves Start, End and the loop points to the nearest zero crossings, so they don't click.
+- **Snap 0×** moves the selected sample's start, end and loop points to the nearest zero crossings, so they don't click.
 - **Normalize** turns the selected layer's level up until its loudest sample peaks at 0 dB. Your files aren't changed.
 
 ### Granular
@@ -192,7 +204,8 @@ The preset name is in the middle of the header:
 
 - **< / >** step through your presets.
 - **Save** stores the current sound with a name and category. Saving with the same name replaces it.
-- **Browse** lists your presets by category, with a search box. Click a preset to load it; double-click to load it and close the browser. **Init sound** goes back to the default.
+- **Browse** lists your presets by category, with a search box. Click a preset to load it; double-click to load it and close the browser.
+- **Init sound** gives a clean, empty starting point: no effects, filter open, nothing modulated, a simple envelope, One-shot playback and no layers. New instruments from the Create page start from the same Init.
 
 ![Preset browser](screenshots/presets.png)
 
@@ -223,7 +236,7 @@ The **inspector** on the right edits the selected layer:
 
 ## Bringing in samples
 
-- **Import folder…** (Layers page): pick a folder, and every audio file in it (WAV, AIFF, FLAC, OGG or MP3) becomes layers, mapped by name.
+- **Import folder…** (Layers page): pick a folder, and every audio file in it (WAV, AIFF, FLAC, OGG or MP3) becomes layers, mapped by name, with start and end points found automatically (for folders of up to 300 files; use **Auto S/E → Every sample** for bigger ones).
 - **Drag and drop:** drop audio files anywhere on the window. They're copied to `Documents/mtyaSampler/Samples/Dropped` and mapped the same way.
 - **Naming:** the mapper understands names such as:
   - `Piano_C3_mf_rr2.wav`
@@ -259,7 +272,8 @@ The Create page records a whole instrument with you, note by note.
    - **Start level:** what counts as sound.
    - **Stop after silence:** how long a quiet tail lasts before the take ends.
    - **Keep before start**, the **fade-out**, and **normalize** (each take, the whole session, or off).
-   - **Hear the input**, and **Replace current instrument**.
+   - **Hear the input**.
+   - **Start from**: **New instrument** (the default) begins from the clean Init (below), named after the session. **Add to current** adds the session's layers to the instrument you have open.
    - The save folder.
 7. Press **Start session**.
 
@@ -313,6 +327,7 @@ Everything lives in your **Documents/mtyaSampler** folder:
 
 - **Silence, or a plain sine tone:** the layer's sample file wasn't found. Re-import it, or keep your samples under `Documents/mtyaSampler/Samples`.
 - **Clicks at the loop point:** raise **X-Fade**, or press **Snap 0×**.
+- **Silence or a late attack at the start of a note:** that sample's Start is too late, or the file has a silent lead-in. Drag **S**, or use **Auto S/E**.
 - **Squealing filter:** the resonance is in the self-oscillation zone (above about 90 %). Turn it down, or play with it.
 - **Computer keys don't play in a DAW:** some hosts take keystrokes first. Click the keyboard or use MIDI.
 - **The Create page hears nothing:** check the input routing and the **Start level**. The input meter on the Session panel should move when you play.

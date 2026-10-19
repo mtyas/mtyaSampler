@@ -162,12 +162,14 @@ export async function createBridge() {
       const next = i < 0 ? (d > 0 ? 0 : list.length - 1) : (i + d + list.length) % list.length;
       return this.load(list[next].path);
     },
-    async init() {
-      for (const [, v] of params) v.setValue(v.spec.default);
-      instrument = await (await fetch('demo-layers.json')).json();
+    async init(name = 'Init') {
+      // Same clean starting point as Source/PresetManager::init (ui/clean-init.json)
+      const clean = await (await fetch('clean-init.json')).json();
+      for (const [id, v] of params) v.setValue(id in clean.params ? clean.params[id] : v.spec.default);
+      instrument = JSON.parse(JSON.stringify(clean.instrument));
       layersEv.emit(instrument);
-      this.setCurrent({ name: 'Init', category: '', path: '' });
-      return { ok: true, message: 'Back to the Init sound' };
+      this.setCurrent({ name, category: '', path: '' });
+      return { ok: true, message: name === 'Init' ? 'Clean Init sound: no effects, no layers' : `New instrument “${name}”`, instrument: JSON.stringify(instrument) };
     }
   };
   async function mockCommand(name, ...args) {
@@ -179,6 +181,7 @@ export async function createBridge() {
       case 'presetPrev': return mockPresets.step(-1);
       case 'presetNext': return mockPresets.step(1);
       case 'presetInit': return mockPresets.init();
+      case 'presetNew': return mockPresets.init(String(args[0] || '').trim() || 'New Instrument');
       case 'peaks': return { ok: false, meta: 'Preview: no audio files' };
       case 'about': return { version: '0.1.0', format: 'Browser preview' };
       default: return { ok: false, reason: 'preview' };

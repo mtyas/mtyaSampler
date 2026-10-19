@@ -7,7 +7,7 @@ Three pages in one fixed 1280×920 window, which scales to the plugin window. Sc
 | Area | Contents | Bound to |
 |---|---|---|
 | Header | Logo, page switch (Main / Layers), preset name with previous/next, Browse, Save, voice count, CPU, master slider, output meter | `master_vol`; commands `presetPrev/Next/Browse/Save`; `meters` event |
-| Sample editor | Selected layer's sample name, playback-mode switch, waveform with start/end markers (S/E), loop region (L), slice lines or grain window depending on mode; 7 knobs; Root, Slices, Snap 0×, Normalize | `play_mode`, `smp_start`, `smp_end`, `loop_start`, `loop_end`, `loop_xfade`, `tune`, `fine`, `grn_pos` |
+| Sample editor | Selected layer's sample name, RR picker, playback-mode switch, waveform with draggable start/end (S/E) and loop (L) markers, slice lines or grain window depending on mode; Start/End/Loop In/Loop Out knobs (the selected sample's own points, `js/regions.js`), X-Fade, Tune, Fine; Root, Auto S/E, Snap 0×, Normalize | instrument JSON (sample points), `play_mode`, `loop_xfade`, `tune`, `fine`, `grn_pos` |
 | Layers (compact) | Scrolling list of every layer (number, name, key/velocity range, RR count, mute, solo), Mapping button → Layers page, Add layer | instrument JSON |
 | Granular | Freeze, grain-cloud display, Size, Density, Spray, Pitch Rnd | `grn_*` |
 | Filter | Type switch (LP24, LP12, BP, HP, Comb), live response curve, Cutoff, Reso, Drive, Env Amt | `flt_*` |
@@ -74,15 +74,17 @@ Native functions (JS calls C++):
 |---|---|---|
 | `presetList` | — | `[{ name, category, path }]` |
 | `presetLoad` / `presetSave` | path / name, category | loads or saves `Documents/mtyaSampler/Presets/<Category>/<Name>.mtyapreset` |
-| `presetPrev` / `presetNext` / `presetInit` / `presetCurrent` / `presetReveal` | — | step through the list, reset to defaults, report the current one, show the folder |
+| `presetPrev` / `presetNext` / `presetInit` / `presetCurrent` / `presetReveal` | — | step through the list, the clean Init, report the current one, show the folder |
 | `importSamples` | — | folder chooser; every audio file becomes layers, mapped by name (async) |
 | `importDropped` | JSON `[{ name, data (base64) }]` | files dropped on the window, saved to `Samples/Dropped`, then imported the same way |
 | `autoMap` / `fillGaps` | — | re-map layers from their file names / close key gaps between zones |
 | `learnRange` | layer id | waits up to 15 s for two notes, sets low/high key (async) |
 | `detectRoot` | layer id | YIN pitch detection on the layer's first sample → `root` |
-| `snapZero` | layer id | moves Start, End and the loop points to zero crossings of that sample |
+| `snapZero` | layer id, variation | moves that sample's start, end and loop points to zero crossings |
+| `autoRegion` | layer id, variation, scope (`sample` / `layer` / `all`), threshold dB | finds start/end from the level and a loop in the steady part (SampleTools::findRegion) |
+| `presetNew` | name | the clean Init (`ui/clean-init.json`) named after a new Create-page instrument; returns `{ ok, message, instrument }` |
 | `normalize` | layer id | toggles the layer's non-destructive `normalize` flag |
-| `peaks` | layer id | `{ ok, file, meta, peaks: [[min, max] × 1000] }` for the waveform |
+| `peaks` | layer id, variation | `{ ok, file, meta, seconds, peaks: [[min, max] × 1000] }` for the waveform |
 | `previewFile` / `stopPreview` | path / — | plays a WAV through the output once (Create page "Play") |
 | `chooseFolder` | start folder | `{ ok, path }` |
 | `about` | — | `{ version, format }` for the About box |
@@ -112,7 +114,7 @@ Parameters use JUCE's relays. In JS, `getSliderState(id)`, `getToggleState(id)` 
       "lo": 36, "hi": 53, "root": 45, "vlo": 0, "vhi": 52,
       "keyFade": 2, "velFade": 8, "keyTrack": 100,
       "rrMode": "off | cycle | random | norepeat", "rrGroup": "RR-Felt", "rrReset": "never | idle | transport",
-      "samples": ["Felt_A1_pp_rr1.wav", "Felt_A1_pp_rr2.wav"],
+      "samples": ["Felt_A1_pp_rr1.wav", { "file": "Felt_A1_pp_rr2.wav", "start": 0.012, "end": 0.94, "loopStart": 0.41, "loopEnd": 0.83 }],
       "volume": 0.0, "pan": 0, "output": "Main | Bus 2 | Bus 3 | Bus 4",
       "muted": false, "solo": false,
       "trigger": "attack | release | legato | first", "releaseVolume": -6, "releaseDecay": 600, "velToVol": 80,
@@ -124,7 +126,7 @@ Parameters use JUCE's relays. In JS, `getSliderState(id)`, `getToggleState(id)` 
 }
 ```
 
-Units: keys and keyswitch are MIDI notes (−1 = none), volume is in dB, pan runs −50…50, times are in ms, `keyTrack` and `velToVol` are percentages. `samples` holds one file per round-robin variation: a full path, or a bare file name looked up in the optional top-level `"sampleFolder"` (a full path), then under `Documents/mtyaSampler/Recordings` and `Documents/mtyaSampler/Samples` (recursively). Placeholders such as `(drop a sample)` and files that can't be found play a quiet sine at the layer's root.
+Units: keys and keyswitch are MIDI notes (−1 = none), volume is in dB, pan runs −50…50, times are in ms, `keyTrack` and `velToVol` are percentages. `samples` holds one entry per round-robin variation: a file name, or `{ file, start, end, loopStart, loopEnd }` with that sample's own points as fractions of the file (defaults 0, 1, 0.3, 0.8). The file is a full path, or a bare file name looked up in the optional top-level `"sampleFolder"` (a full path), then under `Documents/mtyaSampler/Recordings` and `Documents/mtyaSampler/Samples` (recursively). Placeholders such as `(drop a sample)` and files that can't be found play a quiet sine at the layer's root.
 
 How the engine reads the layer fields:
 
@@ -136,7 +138,7 @@ How the engine reads the layer fields:
 - `output`: Bus 2–4 play on those plugin outputs when the host has switched them on (they skip the FX chain and Master); otherwise on Main.
 - `normalize: true` applies a gain so the layer's loudest sample peaks at 0 dBFS (the files aren't changed).
 
-Playback modes (`play_mode`, global): **One-shot** plays Start→End once, stopping early on key-up via the amp envelope. **Loop** plays into the loop and repeats Loop Start→Loop End with an equal-power crossfade (`loop_xfade`, limited by the audio before the loop start). **Ping-pong** bounces between the loop points. **Slice** splits Start→End into 16; the key's distance from the root picks the slice (root = slice 1), played at its own pitch. **Granular** sprays grains (`grn_size`, `grn_density`, `grn_spray`, `grn_pitchrnd`) around a position that starts at `grn_pos` and moves at normal speed, or stays at `grn_pos` while Freeze is on. Release samples always play as one-shots. Pitch bend is ±2 st; the sustain pedal (CC 64) holds notes.
+Playback modes (`play_mode`, global): **One-shot** plays the sample's start→end once, stopping early on key-up via the amp envelope. **Loop** plays into the loop and repeats Loop Start→Loop End with an equal-power crossfade (`loop_xfade`, limited by the audio before the loop start). **Ping-pong** bounces between the loop points. **Slice** splits Start→End into 16; the key's distance from the root picks the slice (root = slice 1), played at its own pitch. **Granular** sprays grains (`grn_size`, `grn_density`, `grn_spray`, `grn_pitchrnd`) around a position that starts at `grn_pos` and moves at normal speed, or stays at `grn_pos` while Freeze is on. Release samples always play as one-shots. Pitch bend is ±2 st; the sustain pedal (CC 64) holds notes.
 
 Sound design (per voice: sample → filter with drive → modulated pan → Env 1 amp; then the FX chain and Master on the whole mix):
 
@@ -196,10 +198,6 @@ Global sources are applied once per block; per-voice ones per voice. An instrume
 |---|---|---|---|---|---|
 | `master_vol` | Master Volume | float | 0 – 100 % | 72 | Master |
 | `play_mode` | Playback Mode | choice | One-shot / Loop / Ping-pong / Slice / Granular | Granular | Sample |
-| `smp_start` | Sample Start | float | 0 – 100 % | 8 | Sample |
-| `smp_end` | Sample End | float | 0 – 100 % | 86 | Sample |
-| `loop_start` | Loop Start | float | 0 – 100 % | 34 | Sample |
-| `loop_end` | Loop End | float | 0 – 100 % | 72 | Sample |
 | `loop_xfade` | Loop Crossfade | float | 0 – 500 ms (skew 0.4) | 22 | Sample |
 | `tune` | Tune | float | -24 – 24 st (step 1, bipolar) | 0 | Sample |
 | `fine` | Fine Tune | float | -100 – 100 ct (step 1, bipolar) | 12 | Sample |
