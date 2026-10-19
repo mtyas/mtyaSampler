@@ -64,6 +64,7 @@ export function setupLayers(bridge, ui) {
       row.innerHTML =
         `<button class="pick" aria-pressed="${i === sel}"><span class="badge">${String(i + 1).padStart(2, '0')}</span>` +
         `<span class="txt"><b></b><span class="meta" style="font-size:10px">${noteName(l.lo)}–${noteName(l.hi)} · v${l.vlo}–${l.vhi}</span></span></button>` +
+        `${l.engine && l.engine.own ? '<span class="own-badge" title="Has its own sample settings">OWN</span>' : ''}` +
         `<span class="meta" style="font-size:10px">${l.samples.length > 1 ? 'RR×' + l.samples.length : ''}</span>` +
         `<button class="ms" aria-label="Mute ${l.name}" aria-pressed="${!!l.muted}">M</button>` +
         `<button class="ms solo" aria-label="Solo ${l.name}" aria-pressed="${!!l.solo}">S</button>`;

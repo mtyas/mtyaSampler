@@ -1,4 +1,4 @@
-import { createBridge } from './bridge.js';
+import { createBridge, ENGINE_IDS } from './bridge.js';
 import { knob, hslider, segmented, toggle, tabs, setAppScale } from './controls.js';
 import { setupDisplays } from './displays.js';
 import { setupLayers, noteName } from './layers.js';
@@ -180,12 +180,38 @@ async function boot() {
       return r;
     },
     // The selected layer changed (or its samples did): the sample editor follows it
-    layerChanged: (l) => { if (regions) regions.load(l); },
+    layerChanged: (l) => { if (regions) regions.load(l); bridge.refreshEngineScope(); renderOwn(); },
     selectVariation: (i) => { if (regions) regions.select(i); },
     openEditor: () => showPage('main')
   };
   let regions = null;
-  const layers = setupLayers(bridge, ui);
+  let layers = null;   // set just below; the Layers page reports its first selection while it's being set up
+
+  // ---------- per-layer engine settings ("Own settings") ----------
+  const ownBtn = $('own-engine');
+  function renderOwn() {
+    const l = layers ? layers.current() : null;
+    ownBtn.setAttribute('aria-pressed', String(!!(l && l.engine && l.engine.own)));
+    ownBtn.disabled = !l;
+  }
+  ownBtn.onclick = () => {
+    const l = layers.current();
+    if (!l) return;
+    const inst = JSON.parse(JSON.stringify(bridge.getInstrument()));
+    const t = inst.layers.find((x) => x.id === l.id);
+    if (t.engine && t.engine.own) t.engine.own = false;                 // follow the instrument again (keeps the copy)
+    else if (t.engine) t.engine.own = true;                             // back to the layer's previous settings
+    else {
+      t.engine = { own: true };                                         // start from the instrument's current values
+      for (const id of ENGINE_IDS) t.engine[id] = bridge.globalParam(id).getValue();
+    }
+    bridge.setInstrument(inst).then(() => { bridge.refreshEngineScope(); renderOwn(); });
+    ui.toast(t.engine.own ? `“${t.name}” now has its own sample settings` : `“${t.name}” follows the instrument's knobs again`);
+  };
+
+  layers = setupLayers(bridge, ui);
+  bridge.setEngineScope(() => layers.current());
+  renderOwn();
   const presets = setupPresets(bridge, ui);
   setupAbout(bridge);
   regions = setupRegions(bridge, ui, displays);

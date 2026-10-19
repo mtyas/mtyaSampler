@@ -245,6 +245,30 @@ static Layer::Region parseRegion (const juce::var& entry)
     return r;
 }
 
+// A layer's own engine settings, in the same units as the parameters (play_mode index, time_speed %,
+// formant st, tune st, fine ct, loop_xfade ms, grn_pos %, grn_size ms, grn_density /s, grn_spray %, ...)
+static LayerEngine parseEngine (const juce::var& e)
+{
+    LayerEngine r;
+    if (! e.isObject() || ! (bool) e["own"])
+        return r;
+    auto num = [&e] (const char* k, double fallback, double lo, double hi) { return juce::jlimit (lo, hi, e[k].isVoid() ? fallback : (double) e[k]); };
+    r.own = true;
+    r.playMode = (int) num ("play_mode", 0, 0, 4);
+    r.stretchMode = (int) num ("stretch_mode", 0, 0, 2);
+    r.speed = (float) (num ("time_speed", 100, 5, 800) * 0.01);
+    r.formantRatio = (float) std::exp2 (num ("formant", 0, -24, 24) / 12.0);
+    r.tuneSemis = (float) (num ("tune", 0, -48, 48) + num ("fine", 0, -100, 100) * 0.01);
+    r.loopXfadeMs = (float) num ("loop_xfade", 20, 0, 2000);
+    r.grnPos = (float) (num ("grn_pos", 50, 0, 100) * 0.01);
+    r.grnSizeMs = (float) num ("grn_size", 80, 1, 2000);
+    r.grnDensity = (float) num ("grn_density", 20, 0.1, 500);
+    r.grnSpray = (float) (num ("grn_spray", 0, 0, 100) * 0.01);
+    r.grnPitchRnd = (float) num ("grn_pitchrnd", 0, 0, 48);
+    r.grnFreeze = (bool) e["grn_freeze"];
+    return r;
+}
+
 static void parseRoutes (const juce::var& list, const juce::StringArray& paramIds, std::vector<ModRoute>& out)
 {
     const auto* routes = list.getArray();
@@ -369,6 +393,8 @@ std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, Sample
 
         for (const auto& s : layer.samples)
             ++(s->missing ? map->missingSamples : map->loadedSamples);
+
+        layer.engine = parseEngine (l["engine"]);
 
         if ((bool) l["normalize"])
         {

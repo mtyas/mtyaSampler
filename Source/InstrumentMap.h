@@ -24,6 +24,19 @@ struct SampleData
 };
 using SamplePtr = std::shared_ptr<const SampleData>;
 
+// The sample-engine settings: the instrument's knobs, or a layer's own copy ("engine" in its JSON,
+// when "own" is true). Values are in the engine's units.
+struct LayerEngine
+{
+    bool own = false;
+    int playMode = 0, stretchMode = 0;      // see SamplerEngine::PlayMode; 0 Resample, 1 Stretch, 2 Formant
+    float speed = 1, formantRatio = 1;
+    float tuneSemis = 0;                    // tune + fine
+    float loopXfadeMs = 0;
+    float grnPos = 0.5f, grnSizeMs = 80, grnDensity = 20, grnSpray = 0, grnPitchRnd = 0;   // pos and spray 0–1
+    bool grnFreeze = false;
+};
+
 struct Layer
 {
     enum class RRMode { off, cycle, random, noRepeat };
@@ -65,6 +78,7 @@ struct Layer
     float glideMs = 0;
 
     float normalizeGain = 1.0f;             // "normalize": true brings the loudest sample to 0 dBFS
+    LayerEngine engine;                     // used when engine.own; otherwise the instrument's knobs
 
     int keyswitch = -1;                     // MIDI note, -1 = always active
     int articulation = -1;                  // index of the articulation name, -1 = none

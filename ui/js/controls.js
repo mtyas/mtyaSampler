@@ -61,6 +61,13 @@ function attachDrag(el, p, axis, pixels) {
   }, { passive: false });
   el.addEventListener('dblclick', () => { p.begin(); p.setValue(p.spec.default); p.end(); });
   el.addEventListener('keydown', (e) => {
+    // Stepped knobs (Tune, Fine, Bits…) move one step per press (ten with Shift); 1 % could round to nothing
+    if (p.spec.step && (e.key.startsWith('Arrow'))) {
+      const dir = e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 1 : -1;
+      const v = Math.max(p.spec.min, Math.min(p.spec.max, p.getValue() + dir * p.spec.step * (e.shiftKey ? 10 : 1)));
+      e.preventDefault(); p.begin(); p.setValue(v); p.end();
+      return;
+    }
     const big = e.shiftKey ? 0.1 : 0.01;
     let n = null;
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') n = p.getNorm() + big;

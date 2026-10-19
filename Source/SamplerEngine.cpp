@@ -219,21 +219,23 @@ void SamplerEngine::readBlockParams()
         }
 
     auto get = [this] (int i, float fallback) { return param (i, fallback); };
-    bp.playMode    = (PlayMode) juce::jlimit (0, 4, juce::roundToInt (get (ix.playMode, 0)));
-    bp.loopXfadeMs = get (ix.loopXfade, 0);
-    bp.stretchMode = juce::jlimit (0, 2, juce::roundToInt (get (ix.stretchMode, 0)));
-    bp.speed       = juce::jlimit (0.05f, 8.0f, get (ix.timeSpeed, 100) * 0.01f);
-    bp.formantRatio = std::exp2 (get (ix.formant, 0) / 12.0f);
-    bp.tuneSemis   = get (ix.tune, 0) + get (ix.fine, 0) * 0.01f + pitchBendSemis;
-    bp.grnPos      = get (ix.grnPos, 50) * 0.01f;
-    bp.grnSizeMs   = juce::jmax (1.0f, get (ix.grnSize, 80));
-    bp.grnDensity  = juce::jmax (0.1f, get (ix.grnDensity, 20));
-    bp.grnSpray    = get (ix.grnSpray, 0) * 0.01f;
-    bp.grnPitchRnd = get (ix.grnPitchRnd, 0);
-    bp.grnFreeze   = get (ix.grnFreeze, 0) >= 0.5f;
-    auto adsr = [&get] (const int (&e)[4]) -> juce::ADSR::Parameters
+    auto& e = bp.engine;
+    e.own         = false;
+    e.playMode    = juce::jlimit (0, 4, juce::roundToInt (get (ix.playMode, 0)));
+    e.loopXfadeMs = get (ix.loopXfade, 0);
+    e.stretchMode = juce::jlimit (0, 2, juce::roundToInt (get (ix.stretchMode, 0)));
+    e.speed       = juce::jlimit (0.05f, 8.0f, get (ix.timeSpeed, 100) * 0.01f);
+    e.formantRatio = std::exp2 (get (ix.formant, 0) / 12.0f);
+    e.tuneSemis   = get (ix.tune, 0) + get (ix.fine, 0) * 0.01f;
+    e.grnPos      = get (ix.grnPos, 50) * 0.01f;
+    e.grnSizeMs   = juce::jmax (1.0f, get (ix.grnSize, 80));
+    e.grnDensity  = juce::jmax (0.1f, get (ix.grnDensity, 20));
+    e.grnSpray    = get (ix.grnSpray, 0) * 0.01f;
+    e.grnPitchRnd = get (ix.grnPitchRnd, 0);
+    e.grnFreeze   = get (ix.grnFreeze, 0) >= 0.5f;
+    auto adsr = [&get] (const int (&knob)[4]) -> juce::ADSR::Parameters
     {
-        return { get (e[0], 0.005f), get (e[1], 0.1f), get (e[2], 100) * 0.01f, get (e[3], 0.1f) };
+        return { get (knob[0], 0.005f), get (knob[1], 0.1f), get (knob[2], 100) * 0.01f, get (knob[3], 0.1f) };
     };
     bp.env  = adsr (ix.env1);
     bp.env2 = adsr (ix.env2);
@@ -379,7 +381,6 @@ void SamplerEngine::handleMidi (const juce::MidiMessage& m)
     else if (m.isPitchWheel())
     {
         pitchBendSemis = (float) (m.getPitchWheelValue() - 8192) / 8192.0f * bendRangeSemis;
-        bp.tuneSemis = param (ix.tune, 0) + param (ix.fine, 0) * 0.01f + pitchBendSemis;
     }
     else if (m.isController() && m.getControllerNumber() == 1)
         modWheel = (float) m.getControllerValue() / 127.0f;   // takes effect from the next block
@@ -678,7 +679,8 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
     v.level = 0;
 
     // Release samples always play through once; otherwise the Playback Mode applies.
-    v.mode = isRelease ? PlayMode::oneShot : bp.playMode;
+    const auto& eng = engineOf (layer);
+    v.mode = isRelease ? PlayMode::oneShot : (PlayMode) eng.playMode;
     v.sliceIndex = ((note - layer.root) % 16 + 16) % 16;
     v.rateScale = v.sample->sampleRate / sampleRate;
 
@@ -704,10 +706,10 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
     updateRegion (v);
     startModulation (v);   // also gives the sample-start modulation for this note
     v.pos = v.regionStart + juce::jlimit (0.0, 0.999, (double) v.startMod) * (v.regionEnd - v.regionStart);
-    v.grainHead = v.regionStart + bp.grnPos * (v.regionEnd - v.regionStart);
+    v.grainHead = v.regionStart + eng.grnPos * (v.regionEnd - v.regionStart);
     v.untilNextGrain = 0;
-    v.stretch = v.mode == PlayMode::granular ? 0 : bp.stretchMode;
-    v.timeInc = v.rateScale * bp.speed;
+    v.stretch = v.mode == PlayMode::granular ? 0 : eng.stretchMode;
+    v.timeInc = v.rateScale * eng.speed;
     v.hasPrevGrain = false;
     for (auto& gr : v.grains)
         gr.active = false;
@@ -781,7 +783,7 @@ void SamplerEngine::updateRegion (Voice& v) const
     v.loopEnd = le;
     v.loopValid = le - ls >= 32.0;
     // The crossfade reads audio from before the loop start, so it can't be longer than that.
-    v.xfadeLen = juce::jmin ((double) bp.loopXfadeMs * 0.001 * v.sample->sampleRate, (le - ls) * 0.5, ls);
+    v.xfadeLen = juce::jmin ((double) engineOf (*v.layer).loopXfadeMs * 0.001 * v.sample->sampleRate, (le - ls) * 0.5, ls);
 }
 
 float SamplerEngine::read (const SampleData& s, int channel, double pos) const noexcept
@@ -809,7 +811,7 @@ void SamplerEngine::triggerGrain (Voice& v)
         const auto spray = (double) v.grainSpray * region * (random.nextDouble() - 0.5);
         const auto pitch = v.grainPitchRnd > 0 ? std::exp2 ((random.nextFloat() * 2.0f - 1.0f) * v.grainPitchRnd / 12.0f) : 1.0f;
         g.inc = v.inc * pitch;
-        g.length = juce::jmax (8, (int) (bp.grnSizeMs * v.grainSizeMul * 0.001 * sampleRate));
+        g.length = juce::jmax (8, (int) (engineOf (*v.layer).grnSizeMs * v.grainSizeMul * 0.001 * sampleRate));
         // Centre the grain on the chosen position (modulation can move it)
         const auto centre = v.grainHead + (double) v.grainPosOffset * region + spray;
         g.pos = juce::jlimit (v.regionStart, v.regionEnd, centre) - g.inc * g.length * 0.5;
@@ -882,7 +884,7 @@ void SamplerEngine::startStretchGrain (Voice& v, const SampleData& s)
     auto period = s.periodSamples > 0 ? (double) s.periodSamples
                                        : fileRate / juce::MidiMessage::getMidiNoteInHertz (v.layer->root);
     period = juce::jlimit (fileRate / 2000.0, fileRate / 30.0, period);
-    const auto readInc = v.rateScale * bp.formantRatio;              // formants move with this, not with pitch
+    const auto readInc = v.rateScale * engineOf (*v.layer).formantRatio;   // formants move with this, not with pitch
     const int length = juce::jmax (16, (int) (2.0 * period / readInc));
     const auto spacing = juce::jmax (1.0, period / v.inc);            // one output period at the played pitch
 
@@ -977,8 +979,9 @@ void SamplerEngine::updateModulation (Voice& v, int rampSamples)
     v.grainPosOffset = mod[Mod::grainPos];
     v.grainSizeMul = std::exp2 (mod[Mod::grainSize] * grainScaleOctaves);
     v.grainDensityMul = std::exp2 (mod[Mod::grainDensity] * grainScaleOctaves);
-    v.grainSpray = juce::jlimit (0.0f, 1.0f, bp.grnSpray + mod[Mod::grainSpray]);
-    v.grainPitchRnd = juce::jmax (0.0f, bp.grnPitchRnd + mod[Mod::grainPitchRnd] * grainPitchRndRange);
+    const auto& eng = engineOf (*v.layer);
+    v.grainSpray = juce::jlimit (0.0f, 1.0f, eng.grnSpray + mod[Mod::grainSpray]);
+    v.grainPitchRnd = juce::jmax (0.0f, eng.grnPitchRnd + mod[Mod::grainPitchRnd] * grainPitchRndRange);
 
     // Filter: the knobs (smoothed, in octaves), Env 2 through Env Amt, plus routed modulation
     const auto knobOct = std::log2 (juce::jmax (20.0f, bp.cutoff));
@@ -1016,9 +1019,10 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
     const auto endFade = endFadeSeconds * smp.sampleRate;
 
     // Granular: the cloud is normalised by how many grains overlap
-    const auto overlap = bp.grnDensity * bp.grnSizeMs * 0.001f;
+    const auto& eng = engineOf (*v.layer);
+    const auto overlap = eng.grnDensity * eng.grnSizeMs * 0.001f;
     const auto grainNorm = 1.0f / std::sqrt (juce::jmax (1.0f, overlap));
-    const auto freezePos = v.regionStart + bp.grnPos * (v.regionEnd - v.regionStart);
+    const auto freezePos = v.regionStart + eng.grnPos * (v.regionEnd - v.regionStart);
 
     for (int i = 0; i < num; ++i)
     {
@@ -1035,8 +1039,8 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
                 }
             }
             updateModulation (v, pitchChunk);
-            v.inc = v.rateScale * std::exp2 ((v.semis + bp.tuneSemis + v.pitchMod) / 12.0f);
-            v.timeInc = v.rateScale * bp.speed;
+            v.inc = v.rateScale * std::exp2 ((v.semis + eng.tuneSemis + pitchBendSemis + v.pitchMod) / 12.0f);
+            v.timeInc = v.rateScale * eng.speed;
         }
 
         float l = 0, r = 0;
@@ -1123,7 +1127,7 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
                 if (--v.untilNextGrain <= 0)
                 {
                     triggerGrain (v);
-                    const auto interval = sampleRate / (bp.grnDensity * v.grainDensityMul);
+                    const auto interval = sampleRate / (eng.grnDensity * v.grainDensityMul);
                     v.untilNextGrain = juce::jmax (1, (int) (interval * (0.75 + 0.5 * random.nextDouble())));
                 }
                 for (auto& g : v.grains)
@@ -1144,7 +1148,7 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
                 r *= grainNorm;
 
                 // Freeze holds the cloud at Grain Position; otherwise it drifts through the region in real time.
-                if (bp.grnFreeze)
+                if (eng.grnFreeze)
                     v.grainHead = freezePos;
                 else
                 {

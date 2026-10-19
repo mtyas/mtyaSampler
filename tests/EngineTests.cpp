@@ -744,6 +744,23 @@ int main()
                "Formant keeps the vowel's resonance near 1 kHz when the pitch goes up a fifth (Resample: " + juce::String (resampled, 0) + " Hz, Formant: " + juce::String (formant, 0) + " Hz)");
     }
 
+    std::cout << "Per-layer engine settings" << std::endl;
+    {
+        // Layer 1 has its own settings (tune +12, Loop, Stretch at Speed 50 %); layer 2 follows the instrument's knobs
+        const auto own = R"("engine":{"own":true,"play_mode":1,"stretch_mode":1,"time_speed":50,"tune":12,"fine":0,"loop_xfade":10},)";
+        Rig rig (instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":59,\"root\":48,") + own + base + ",\"samples\":[" + path (s200) + "]"),
+                               layer (juce::String ("\"id\":2,\"lo\":60,\"hi\":127,\"root\":60,") + base + ",\"samples\":[" + path (s200) + "]") }));
+        rig.fp.set ("tune", -12);   // the instrument's Tune: only layer 2 follows it
+        rig.on (48); rig.run (2.5);
+        check (near (rig.hz (0.1, 0.4), 400, 6) && rig.rms (2.2, 2.5) > 0.1f,
+               "a layer with its own settings uses its own tune and engine (" + juce::String (rig.hz (0.1, 0.4), 0) + " Hz, still looping at 2.2 s)");
+        rig.off (48); rig.run (0.1);
+        rig.on (60); rig.run (2.4);
+        // Tune -12 and Resample: half speed, so the 1 s one-shot lasts 2 s and stops
+        check (near (rig.hz (0.1, 0.4), 100, 3) && rig.rms (1.8, 1.9) > 0.1f && rig.rms (2.1, 2.4) < 1e-4f,
+               "the other layer follows the instrument's knobs (" + juce::String (rig.hz (0.1, 0.4), 0) + " Hz, one-shot resampled: 2 s then stops)");
+    }
+
     std::cout << "Playheads" << std::endl;
     {
         // Layers made in the UI get ids from Date.now(), far beyond 32 bits: they must come back unchanged

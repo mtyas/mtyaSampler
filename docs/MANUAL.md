@@ -46,6 +46,10 @@ The waveform shows the selected layer's sample, with these markers:
 
 Edit the points by **dragging the S, E and L lines on the waveform**, or with the **Start**, **End**, **Loop In** and **Loop Out** knobs. The points stay in order: the loop always sits between start and end. **X-Fade** (the loop crossfade), **Tune** (semitones) and **Fine** (cents) apply to the whole instrument. The selected layer's **root** note is shown next to the file name.
 
+**Own settings (per layer).** By default every layer follows the instrument's sample and granular knobs. Turn on **Own settings** (next to the file name) and the selected layer gets its own copy of them, starting from the current values: playback mode, pitch/time engine, Speed, Formant, Tune, Fine, X-Fade, and the Granular panel (Position, Size, Density, Spray, Pitch Rnd, Freeze). While that layer is selected, those controls edit just that layer, so you can have, say, a looping pad layer and a one-shot attack layer in the same instrument. Layers with their own settings show an **OWN** badge in the layer list. Turn it off to follow the instrument again (the layer's copy is kept, so turning it back on restores it).
+
+A layer's own settings are saved with the instrument and presets but aren't automatable; the instrument's knobs are. Voice modulation (pitch, grain targets…) works on every layer, while a mod-matrix route to one of these knobs only moves the layers that follow the instrument.
+
 **Pitch, time and formant.** The switch above the tool buttons chooses how samples are played back at other pitches:
 
 | Engine | What happens |

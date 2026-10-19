@@ -79,6 +79,42 @@ class JuceParam {
   }
 }
 
+// ---------- per-layer engine settings ----------
+// These knobs can belong to the selected layer ("Own settings": layer.engine = { own: true, <id>: value })
+// instead of the instrument. bridge.param(id) returns this wrapper for them, so every control and display
+// follows the selected layer without knowing about it. The layer's values are saved in the instrument.
+export const ENGINE_IDS = ['play_mode', 'stretch_mode', 'time_speed', 'formant', 'tune', 'fine', 'loop_xfade',
+  'grn_pos', 'grn_size', 'grn_density', 'grn_spray', 'grn_pitchrnd', 'grn_freeze'];
+
+class ScopedParam {
+  constructor(spec, global, scope) { this.spec = spec; this.global = global; this.scope = scope; this.ev = new Emitter(); }
+  owner() { const l = this.scope.layer(); return l && l.engine && l.engine.own ? l : null; }
+  getValue() {
+    const l = this.owner();
+    if (!l) return this.global.getValue();
+    const v = l.engine[this.spec.id];
+    return v === undefined ? this.global.getValue() : v;
+  }
+  getNorm() { return this.owner() ? toNorm(this.spec, this.getValue()) : this.global.getNorm(); }
+  setNorm(n) { if (this.owner()) this.setValue(fromNorm(this.spec, n)); else this.global.setNorm(n); }
+  setValue(v) {
+    const l = this.owner();
+    if (!l) { this.global.setValue(v); return; }
+    if (l.engine[this.spec.id] === v) return;
+    l.engine[this.spec.id] = v;
+    this.scope.changed();
+    this.ev.emit(v);
+  }
+  begin() { if (!this.owner()) this.global.begin(); }
+  end() { if (!this.owner()) this.global.end(); }
+  onChange(fn) {
+    const a = this.ev.on(fn);
+    const b = this.global.onChange((v) => { if (!this.owner()) fn(v); });
+    return () => { a(); b(); };
+  }
+  refresh() { this.ev.emit(this.getValue()); }
+}
+
 // ---------- bridge ----------
 export async function createBridge() {
   const spec = await (await fetch('params.json')).json();
@@ -88,6 +124,16 @@ export async function createBridge() {
 
   const params = new Map();
   for (const s of spec.params) params.set(s.id, inPlugin ? new JuceParam(s, Juce) : new MockParam(s));
+
+  // Per-layer engine settings: the scope says which layer is selected and saves its edits
+  let scopeLayer = () => null;
+  let saveTimer = 0;
+  const scope = {
+    layer: () => scopeLayer(),
+    changed: () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => api.setInstrument(JSON.parse(JSON.stringify(instrument))), 120); }
+  };
+  const scoped = new Map();
+  for (const id of ENGINE_IDS) if (params.has(id)) scoped.set(id, new ScopedParam(params.get(id).spec, params.get(id), scope));
 
   const layersEv = new Emitter();
   const recStateEv = new Emitter();
@@ -202,14 +248,20 @@ export async function createBridge() {
     }
   }
 
-  return {
+  const api = {
     inPlugin,
     spec,
     param(id) {
-      const p = params.get(id);
+      const p = scoped.get(id) || params.get(id);
       if (!p) throw new Error('Unknown parameter id: ' + id + ' (add it to params.json)');
       return p;
     },
+    // The instrument's own knob, ignoring any layer's settings
+    globalParam: (id) => params.get(id),
+    // Which layer the per-layer engine settings belong to (a function returning the selected layer)
+    setEngineScope(getLayer) { scopeLayer = getLayer; scoped.forEach((p) => p.refresh()); },
+    // Re-read after the selection or a layer's "own" switch changed
+    refreshEngineScope() { scoped.forEach((p) => p.refresh()); },
     loadInstrument,
     getInstrument: () => instrument,
     // Replace the whole instrument (layers + global settings). Cheap enough for a few hundred layers.
@@ -252,4 +304,5 @@ export async function createBridge() {
       window.open(url, '_blank', 'noopener');
     }
   };
+  return api;
 }

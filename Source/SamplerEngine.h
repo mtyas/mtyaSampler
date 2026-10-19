@@ -146,15 +146,8 @@ private:
     // Parameter values read once per block (already modulated by the global sources)
     struct BlockParams
     {
-        PlayMode playMode = PlayMode::oneShot;
-        float loopXfadeMs = 0;
-        float tuneSemis = 0;             // tune + fine + pitch bend
-        float grnPos = 0.5f, grnSizeMs = 80, grnDensity = 20, grnSpray = 0, grnPitchRnd = 0;
-        bool grnFreeze = false;
+        LayerEngine engine;              // the instrument's sample-engine knobs (layers can have their own)
         juce::ADSR::Parameters env, env2, env3;
-
-        int stretchMode = 0;             // 0 Resample, 1 Stretch (WSOLA), 2 Formant (PSOLA)
-        float speed = 1, formantRatio = 1;
 
         int fltType = 1;
         float cutoff = 20000, reso = 0, driveDb = 0, envAmt = 0;
@@ -173,6 +166,8 @@ private:
     };
 
     void readBlockParams();
+    // The sample-engine settings a voice uses: its layer's own, or the instrument's
+    const LayerEngine& engineOf (const Layer& l) const noexcept { return l.engine.own ? l.engine : bp.engine; }
 
     // ---- events ----
     void handleMidi (const juce::MidiMessage&);
