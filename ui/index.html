@@ -285,6 +285,17 @@
           </div>
         </div>
         <div class="sep"></div>
+        <div class="sec" id="midi-sec">
+          <h3 class="h">Auto-sample over MIDI</h3>
+          <label class="check"><input type="checkbox" data-key="midi"> Play each note from the plugin's MIDI out (no prompts or count-in)</label>
+          <div class="fields c3">
+            <div class="field"><label for="c-mch">MIDI channel</label><input id="c-mch" data-key="midiChannel" data-kind="int" data-min="1" data-max="16"></div>
+            <div class="field"><label for="c-hold">Hold note (s)</label><input id="c-hold" data-key="holdSec" data-kind="num" data-min="0.05" data-max="30"></div>
+            <div class="field"><label for="c-gap">Gap between (s)</label><input id="c-gap" data-key="gapSec" data-kind="num" data-min="0" data-max="10"></div>
+          </div>
+          <span class="meta wrap" id="midi-hint">Route mtyaSampler's MIDI output to your synth, and the synth's audio back into mtyaSampler's input. Each take records until the release dies away.</span>
+        </div>
+        <div class="sep"></div>
         <div class="sec">
           <h3 class="h">Recording</h3>
           <div class="fields c3">

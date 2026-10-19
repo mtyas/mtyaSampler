@@ -61,7 +61,7 @@ export function setupCreate(bridge, ui) {
     });
   });
 
-  const PRESET_KEYS = ['low', 'high', 'step', 'rr', 'vel', 'maxSec', 'tone'];
+  const PRESET_KEYS = ['low', 'high', 'step', 'rr', 'vel', 'maxSec', 'tone', 'midi'];
   const markCustom = (key) => { if (PRESET_KEYS.includes(key) && s.inst !== 'custom') { const p = PRESETS[s.inst]; if (p[key] !== undefined && p[key] !== s[key]) s.inst = 'custom'; } };
 
   document.querySelectorAll('#setup-form [data-key]').forEach((el) => {
@@ -120,7 +120,11 @@ export function setupCreate(bridge, ui) {
       else el.value = v ?? '';
     });
     const toneBox = document.querySelector('#setup-form [data-key="tone"]');
-    toneBox.disabled = !s.pitched;
+    toneBox.disabled = !s.pitched || s.midi;
+    // MIDI mode plays the notes itself: the prompt, tone and count-in settings don't apply
+    ['voice', 'countBeats', 'bpm', 'toneSec'].forEach((k) => { document.querySelector(`#setup-form [data-key="${k}"]`).disabled = s.midi; });
+    ['midiChannel', 'holdSec', 'gapSec'].forEach((k) => { document.querySelector(`#setup-form [data-key="${k}"]`).disabled = !s.midi; });
+    $('midi-hint').hidden = !s.midi;
     renderRangeKbd();
     const p = buildPlan(s);
     $('range-info').textContent = `${noteName(Math.min(s.low, s.high))} to ${noteName(Math.max(s.low, s.high))} · ${p.roots.length} ${s.pitched ? 'notes recorded' : 'sounds'}, each covering ${s.step === 1 ? '1 key' : 'up to ' + s.step + ' keys'}`;

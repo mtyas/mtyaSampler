@@ -62,6 +62,8 @@ The first configure downloads JUCE and the CLAP extensions, which takes a few mi
    It saves Windows' built-in voice saying each word to `Documents\mtyaSampler\VoicePack`. Without it, the plugin window speaks the prompts with the system voice instead.
 3. On the **Create** page, choose your settings and press **Start session**. Space pauses and resumes. Click any cell in the take map to redo that take.
 
+**Hands-free sampling of a synth (MIDI):** pick the **Hardware Synth** preset (or tick *Play each note from the plugin's MIDI out*). Route mtyaSampler's MIDI output to the synth and the synth's audio back into mtyaSampler's input: in the Standalone app, choose the MIDI output device and audio input in its settings; in Reaper, send the plugin track's MIDI to the synth (or a hardware MIDI output) and the synth's audio to the plugin's input pins. Each note is played, held for the time you set, and recorded until its release dies away.
+
 The samples are saved to `Documents\mtyaSampler\Recordings\<session name>` unless you choose another folder.
 
 ## Work on the UI without rebuilding

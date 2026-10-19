@@ -39,7 +39,7 @@ juce_add_plugin(mtyaSampler
     FORMATS                      VST3 Standalone
     IS_SYNTH                     TRUE
     NEEDS_MIDI_INPUT             TRUE
-    NEEDS_MIDI_OUTPUT            FALSE
+    NEEDS_MIDI_OUTPUT            TRUE
     IS_MIDI_EFFECT               FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS  TRUE
     NEEDS_WEBVIEW2               TRUE
@@ -152,6 +152,7 @@ if(MTYA_BUILD_TESTS)
     target_sources(mtyaPluginTests PRIVATE tests/PluginTests.cpp)
     # Same headers and defines as the plugin's shared code, which it links against
     target_include_directories(mtyaPluginTests PRIVATE $<TARGET_PROPERTY:mtyaSampler,INCLUDE_DIRECTORIES>)
-    target_compile_definitions(mtyaPluginTests PRIVATE $<TARGET_PROPERTY:mtyaSampler,COMPILE_DEFINITIONS>)
+    target_compile_definitions(mtyaPluginTests PRIVATE
+        $<FILTER:$<TARGET_PROPERTY:mtyaSampler,COMPILE_DEFINITIONS>,EXCLUDE,^JUCE_STANDALONE_APPLICATION>)
     target_link_libraries(mtyaPluginTests PRIVATE mtyaSampler)
 endif()

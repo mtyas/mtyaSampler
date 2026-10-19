@@ -95,8 +95,11 @@ void MtyaSamplerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
     main.applyGain (masterVol->load() / 100.0f);
 
+    // The plugin's MIDI output carries only the Create page's auto-sampling notes (not the input)
+    midi.clear();
+
     // Guide track (prompts, tone, count-in) and optional input monitoring; not affected by Master.
-    recorder.process (inputView, main, numSamples);
+    recorder.process (inputView, main, midi, numSamples);
 
     activeVoices.store (engine.getActiveVoices());
 

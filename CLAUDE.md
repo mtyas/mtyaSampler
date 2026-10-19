@@ -69,7 +69,7 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 - **Check UI changes in a real browser.** Serve `ui/`, then use Playwright (or open it) to take screenshots and look at the console. Compare with `docs/screenshots/`.
 - Keep the visual language:
   - **Colours:** graphite panels, amber `--acc` for sample/filter/amp, cyan `--mod` for modulation.
-  - **Fonts:** Barlow for text, JetBrains Mono for values.
+  - **Fonts:** Barlow for text, JetBrains Mono for values, both bundled in `ui/fonts/` (no internet needed).
   - **Sizing:** knobs are 44 px.
 
 ## Roadmap (suggested order)
@@ -100,10 +100,10 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 7. **Native commands: done**: presets and browser, import (folder and drag-and-drop), auto-map, fill gaps, learn range, detect root, snap to zero, normalize, waveform peaks.
 8. **Create page next steps:**
    - Test it in Reaper, Bitwig and the Standalone app with a real mic or instrument; check input routing and latency.
-   - Optionally send the MIDI note out to a hardware synth so synth sampling is fully hands-free (the plugin would then need MIDI output).
+   - Done: MIDI auto-sampling ("Auto-sample over MIDI"): the plugin has a MIDI output and plays each take's note itself. Try it with a real hardware synth in Reaper/Bitwig and the Standalone app (its settings have a MIDI output menu).
    - Done: session normalize runs on a background thread (and the sampler reloads the rewritten files); recent takes have a Play button.
 9. **Polish:**
-   - Bundle the fonts into `ui/fonts/` and replace the Google Fonts `@import`, because a DAW machine may be offline.
+   - Done: the fonts are bundled in `ui/fonts/` (Latin + Latin Extended woff2, OFL licences alongside).
    - Done: drag-and-drop import, window size remembered.
 
 ## Gotchas
@@ -113,5 +113,6 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 - **Computer-keyboard notes:** the UI maps the A–K row to notes. Some DAWs take keystrokes first; that's expected.
 - **Debug assert on startup:** probably `params.json` isn't embedded or isn't valid JSON (jassert in `ParameterSpec::load`).
 - **Keep `ui/js/juce/` out of git.** CMake copies it from JUCE on every configure.
+- **The plugin's MIDI output carries only the Create page's auto-sampling notes.** `processBlock` clears the MIDI buffer before the recorder writes to it, so incoming MIDI is never echoed back to the host.
 - **Dropped files arrive as base64** over the bridge (a WebView can't give the page real file paths), capped at 200 MB per file; Import folder… is better for big libraries.
 - **A popover or modal must be inside `#app`** (overlay.js does this) so it scales with the window.

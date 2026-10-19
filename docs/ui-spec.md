@@ -38,6 +38,8 @@ Note fields accept names like `C3`, `F#2` or `D♯3`, or MIDI numbers. C3 = MIDI
 | Take map | Rows are velocity layers and columns are recorded notes; each cell has one small box per round robin, coloured to do / now / saved / check / skipped. Click a box to record or redo that take. |
 | Recent takes | The last 12 takes, each with a waveform, file, length, peak and any warnings (clipped, nothing heard), plus a Redo button. |
 
+**Auto-sample over MIDI** (Setup, on by default for the Hardware Synth preset): the plugin plays each take's note from its MIDI output instead of prompting you. Settings: MIDI channel, Hold note (s), Gap between (s). Each take waits the gap, sends note-on (velocity = the top of its velocity layer, or 100 with one layer) as recording starts, sends note-off after the hold time, and keeps recording until the release falls silent (or Max length, which is raised to at least hold + 0.5 s). Prompts, tone and count-in are skipped. A held note is always released when a take stops, is skipped or paused, or the session ends. Route the plugin's MIDI out to the synth and the synth's audio into the plugin's input ("Record In").
+
 When a session starts, the planned layers are added to the instrument with empty sample slots, as a group named after the session (or replacing the instrument). Each saved take fills its slot. Skipped slots are removed when the session ends.
 
 File names follow `<Session>_<Note>_<vel>_rr<n>.wav`, for example `My_Guitar_Ds2_f_rr2.wav`, which matches the planned auto-map-by-name feature.

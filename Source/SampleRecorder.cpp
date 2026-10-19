@@ -112,6 +112,9 @@ juce::var SampleRecorder::startSession (const juce::var& j)
     p->fadeMs      = (int) s["fadeMs"];
     p->normalize   = s["normalize"].toString();
     p->autoAdvance = (bool) s["autoAdvance"];
+    p->midi        = (bool) s["midi"];
+    p->midiChannel = juce::jlimit (1, 16, s.hasProperty ("midiChannel") ? (int) s["midiChannel"] : 1);
+    p->holdSec     = juce::jlimit (0.05, 60.0, s.hasProperty ("holdSec") ? (double) s["holdSec"] : 2.0);
     p->pitched     = (bool) s["pitched"];
     const auto in  = s["input"].toString();
     p->inputMode   = in == "left" ? 1 : in == "right" ? 2 : 0;
@@ -134,6 +137,7 @@ juce::var SampleRecorder::startSession (const juce::var& j)
             take.rr   = (int) tk["rr"];
             take.v    = (int) tk["v"];
             take.file = tk["file"].toString();
+            take.velocity = juce::jlimit (1, 127, tk.hasProperty ("velocity") ? (int) tk["velocity"] : 100);
             if (voice) take.prompt = promptFor (tk["say"].toString());
             allPrompts = allPrompts && ! take.prompt.empty();
             p->takes.push_back (std::move (take));
@@ -256,8 +260,8 @@ juce::int64 SampleRecorder::lengthOf (Phase p) const
             for (auto c : prompt) secs += voiceClips[(size_t) c].audio.getNumSamples() / voiceClips[(size_t) c].sampleRate + 0.08;
             return (juce::int64) (secs * sampleRate);
         }
-        case Phase::tone:    return pl.pitched ? (juce::int64) (pl.toneSec * sampleRate) : 0;
-        case Phase::countin: return (juce::int64) (pl.countBeats * pl.beatSec * sampleRate);
+        case Phase::tone:    return pl.pitched && ! pl.midi ? (juce::int64) (pl.toneSec * sampleRate) : 0;
+        case Phase::countin: return pl.midi ? 0 : (juce::int64) (pl.countBeats * pl.beatSec * sampleRate);
         case Phase::record:  return maxRecSamples;
         case Phase::save:    return std::numeric_limits<juce::int64>::max();
         case Phase::idle:    break;
@@ -298,6 +302,7 @@ void SampleRecorder::enterPhase (Phase p)
         envelope = 0.0f;
         heard = false;
         clipFlag = false;
+        sendNoteOn = plan->midi;
         for (auto& lp : livePeaks) lp.store (0.0f);
     }
 }
@@ -355,10 +360,18 @@ float SampleRecorder::guideSample()
     return 0.0f;
 }
 
-void SampleRecorder::process (const juce::AudioBuffer<float>& input, juce::AudioBuffer<float>& output, int numSamples)
+void SampleRecorder::process (const juce::AudioBuffer<float>& input, juce::AudioBuffer<float>& output, juce::MidiBuffer& midiOut, int numSamples)
 {
     const juce::SpinLock::ScopedTryLockType lock (planLock);
     if (! lock.isLocked() || preroll.getNumSamples() == 0) return;
+
+    // MIDI mode: a held note is always released once its take stops recording (save, skip, stop, pause…)
+    auto releaseNote = [&] (int at)
+    {
+        if (heldNote < 0) return;
+        midiOut.addEvent (juce::MidiMessage::noteOff (heldChannel, heldNote), at);
+        heldNote = -1;
+    };
 
     if (plan != nullptr) applyCommands();
 
@@ -382,10 +395,27 @@ void SampleRecorder::process (const juce::AudioBuffer<float>& input, juce::Audio
 
         if (mon) { output.addSample (0, i, l); if (outCh > 1) output.addSample (1, i, r); }
 
+        if (heldNote >= 0 && (plan == nullptr || status != Status::running || phase != Phase::record))
+            releaseNote (i);
+
         if (plan == nullptr || status != Status::running || phase == Phase::idle) continue;
 
         if (phase == Phase::record)
         {
+            if (sendNoteOn)
+            {
+                // The note starts at the first recorded sample; the pre-roll before it stays silent
+                const auto& tk = plan->takes[(size_t) take];
+                releaseNote (i);
+                heldNote = juce::jlimit (0, 127, tk.note);
+                heldChannel = plan->midiChannel;
+                heldSamples = 0;
+                midiOut.addEvent (juce::MidiMessage::noteOn (heldChannel, heldNote, (juce::uint8) tk.velocity), i);
+                sendNoteOn = false;
+            }
+            if (heldNote >= 0 && ++heldSamples >= (juce::int64) (plan->holdSec * sampleRate))
+                releaseNote (i);
+
             if (recPos < maxRecSamples)
             {
                 recBuffer.setSample (0, (int) recPos, l);
@@ -397,7 +427,9 @@ void SampleRecorder::process (const juce::AudioBuffer<float>& input, juce::Audio
             envelope = juce::jmax (a, envelope * envDecay);
             if (envelope > plan->threshold) heard = true;
             silentSamples = (heard && envelope < plan->threshold * 0.5f) ? silentSamples + 1 : 0;
-            const bool silenceStop = plan->silenceMs > 0 && heard && silentSamples > (juce::int64) (plan->silenceMs * sampleRate / 1000.0);
+            // In MIDI mode the take can only end on silence after the note was released (its tail is kept)
+            const bool silenceStop = plan->silenceMs > 0 && heard && heldNote < 0 && ! sendNoteOn
+                                     && silentSamples > (juce::int64) (plan->silenceMs * sampleRate / 1000.0);
             if (recPos >= maxRecSamples || silenceStop)
             {
                 pubRecLen = recPos;
@@ -419,6 +451,9 @@ void SampleRecorder::process (const juce::AudioBuffer<float>& input, juce::Audio
             else if (phase == Phase::countin) enterPhase (Phase::record);
         }
     }
+
+    if (heldNote >= 0 && (plan == nullptr || status != Status::running || phase != Phase::record))
+        releaseNote (juce::jmax (0, numSamples - 1));
 
     if (phase == Phase::record || (phase == Phase::save && recPeak > 0.0f))
     {

@@ -9,7 +9,10 @@
 //   announce  → spoken prompt from the voice pack (or the UI speaks it when no pack is installed)
 //   tone      → reference sine at the note's pitch
 //   countin   → clicks (plus spoken numbers when the voice pack has them)
-//   record    → captures the plugin's audio input; stops at the max length or after silence
+//   record    → captures the plugin's audio input; stops at the max length or after silence.
+//               In MIDI mode ("auto-sampling") the take's note is sent out of the plugin's MIDI
+//               output the moment recording starts, held for holdSec, then released; the
+//               prompts, tone and count-in are skipped (announce becomes a short gap).
 //   save      → waits while the message thread trims the take and writes the WAV
 // then moves to the next take, waits for review, or finishes.
 //
@@ -28,8 +31,9 @@ public:
     void prepare (double sampleRate, int maxBlockSize);
 
     // Audio thread. `input` holds the plugin's input channels (it may have 0 channels).
-    // Guide audio (and the input, when monitoring is on) is added to `output`.
-    void process (const juce::AudioBuffer<float>& input, juce::AudioBuffer<float>& output, int numSamples);
+    // Guide audio (and the input, when monitoring is on) is added to `output`; in MIDI mode the
+    // note-on/off for each take are added to `midiOut`.
+    void process (const juce::AudioBuffer<float>& input, juce::AudioBuffer<float>& output, juce::MidiBuffer& midiOut, int numSamples);
 
     // Message thread. Commands: start(plan) pause resume retake skip next goto(index) stop monitor(bool)
     juce::var command (const juce::String& name, const juce::var& arg);
@@ -55,6 +59,7 @@ private:
     struct Take
     {
         int note = 60, rr = 0, v = 0;
+        int velocity = 100;           // MIDI mode: the velocity sent for this take
         juce::String file;
         std::vector<int> prompt;      // voice clip indices; empty = the UI speaks
     };
@@ -70,6 +75,9 @@ private:
         float threshold = 0.008f;     // linear
         int silenceMs = 900, prerollMs = 20, fadeMs = 60;
         bool autoAdvance = true, pitched = true, voiceInUi = true;
+        bool midi = false;            // auto-sampling: play each take's note over MIDI
+        int midiChannel = 1;
+        double holdSec = 2.0;
         std::array<int, 9> countClips {};   // spoken numbers, index 1..8; -1 = none
     };
 
@@ -121,6 +129,10 @@ private:
     int promptIndex = 0; double promptPos = 0.0; juce::int64 promptGap = 0;
     int countClip = -1; double countPos = 0.0;
     bool pauseAfterSave = false;
+    // MIDI mode
+    bool sendNoteOn = false;               // set on entering the record phase; sent at that sample
+    int heldNote = -1, heldChannel = 1;    // the note we have on, -1 = none
+    juce::int64 heldSamples = 0;
 
     // ---- voice pack (loaded once in the constructor, read-only afterwards) ----
     std::vector<VoiceClip> voiceClips;

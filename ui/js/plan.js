@@ -10,7 +10,9 @@ export const DEFAULTS = {
   order: 'note', direction: 'up',
   countBeats: 3, bpm: 90, toneSec: 1.5, tone: true, voice: true, autoAdvance: true,
   input: 'stereo', thresholdDb: -42, silenceMs: 900, prerollMs: 20, fadeMs: 60, normalize: 'session',
-  monitor: false, replace: false, folder: ''
+  monitor: false, replace: false, folder: '',
+  // Auto-sampling: play each note out of the plugin's MIDI output (hardware synths, other plugins)
+  midi: false, midiChannel: 1, holdSec: 2, gapSec: 0.5
 };
 
 // Note numbers use C3 = 60 (the convention used everywhere in this plugin).
@@ -20,7 +22,7 @@ export const PRESETS = {
   keys:    { label: 'Keys / Piano',     low: 33, high: 96, step: 3, rr: 2, vel: 3, maxSec: 8, pitched: true,  tone: true },
   bass:    { label: 'Bass',             low: 28, high: 67, step: 3, rr: 2, vel: 2, maxSec: 5, pitched: true,  tone: true },
   strings: { label: 'Strings & Winds',  low: 55, high: 93, step: 2, rr: 2, vel: 2, maxSec: 6, pitched: true,  tone: true },
-  synth:   { label: 'Hardware Synth',   low: 36, high: 96, step: 3, rr: 1, vel: 1, maxSec: 4, pitched: true,  tone: true },
+  synth:   { label: 'Hardware Synth',   low: 36, high: 96, step: 3, rr: 1, vel: 1, maxSec: 4, pitched: true,  tone: true, midi: true },
   drums:   { label: 'Drums & One-shots', low: 36, high: 47, step: 1, rr: 4, vel: 3, maxSec: 2, pitched: false, tone: false },
   custom:  { label: 'Custom' }
 };
@@ -87,6 +89,8 @@ export function buildPlan(s) {
     takes.push({
       i: takes.length, note: root, rootIndex: r.indexOf(root), v, rr, zone: zoneIndex(root, v),
       velLabel: z.velLabel,
+      // MIDI mode: each velocity layer is played at the top of its range (a single layer at 100)
+      velocity: s.vel === 1 ? 100 : Math.max(1, z.vhi),
       file: `${safe(s.name)}_${noteTag(root)}_${z.velTag}_rr${rr + 1}.wav`
     });
   };
@@ -98,6 +102,14 @@ export function buildPlan(s) {
   takes.forEach((t) => { t.say = announceText(s, t); });
 
   const beatSec = 60 / s.bpm;
+  if (s.midi) {
+    // Auto-sampling: no prompts, tone or count-in; a short gap, then the note is played and recorded.
+    // A take always runs past the note's release so the tail is kept.
+    const maxSec = Math.max(s.maxSec, s.holdSec + 0.5);
+    const timing = { announceSec: Math.max(0.2, s.gapSec), toneSec: 0, beatSec, countBeats: 0, maxSec };
+    const perTake = timing.announceSec + s.holdSec + Math.min(maxSec - s.holdSec, (s.silenceMs || 900) / 1000 + 0.5) + 0.3;
+    return { settings: { ...s, voice: false, tone: false, maxSec }, roots: r, zones, takes, timing, estimateSec: Math.round(perTake * takes.length) };
+  }
   const timing = {
     announceSec: s.voice ? 2.2 : 0.8,            // the C++ engine uses the real prompt length when a voice pack is installed
     toneSec: s.tone && s.pitched ? s.toneSec : 0,

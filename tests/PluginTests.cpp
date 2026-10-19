@@ -98,6 +98,69 @@ int main()
     check (restored["fxOrder"][0].toString() == "reverb" && restored["layers"][0]["output"].toString() == "Bus 2", "and the instrument with its FX order");
     check (q.editorWidth == 1000 && q.editorHeight == 719, "and the window size");
 
+    std::cout << "Create page: MIDI auto-sampling" << std::endl;
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("mtyaMidiTest");
+        auto planFor = [&] (double holdSec)
+        {
+            return juce::JSON::parse (R"({ "settings": { "midi": true, "midiChannel": 2, "holdSec": )" + juce::String (holdSec) + R"(,
+                "name": "MidiTest", "folder": )" + juce::JSON::toString (dir.getFullPathName()) + R"(, "thresholdDb": -42, "silenceMs": 300,
+                "prerollMs": 20, "fadeMs": 20, "normalize": "off", "autoAdvance": true, "pitched": true, "input": "stereo", "voice": false },
+              "timing": { "announceSec": 0.2, "toneSec": 1.5, "beatSec": 0.5, "countBeats": 3, "maxSec": 2 },
+              "takes": [ { "note": 62, "rr": 0, "v": 0, "velocity": 90, "file": "t1.wav", "say": "" } ] })");
+        };
+        // Runs `seconds`, returning every MIDI event the plugin sent with its time in seconds
+        auto runCollect = [&] (double seconds, std::vector<std::pair<double, juce::MidiMessage>>& events, double& clock)
+        {
+            for (int done = 0; done < (int) (seconds * 48000); done += 256)
+            {
+                juce::MidiBuffer m;
+                buffer.clear();
+                p.processBlock (buffer, m);
+                for (const auto meta : m)
+                    events.push_back ({ clock + meta.samplePosition / 48000.0, meta.getMessage() });
+                clock += 256 / 48000.0;
+            }
+        };
+
+        std::vector<std::pair<double, juce::MidiMessage>> events;
+        double clock = 0;
+        check ((bool) p.recorder.command ("start", planFor (0.5))["ok"], "a MIDI session starts");
+        runCollect (1.2, events, clock);
+        const auto on = std::find_if (events.begin(), events.end(), [] (auto& e) { return e.second.isNoteOn(); });
+        const auto off = std::find_if (events.begin(), events.end(), [] (auto& e) { return e.second.isNoteOff(); });
+        check (on != events.end() && on->second.getNoteNumber() == 62 && on->second.getChannel() == 2 && on->second.getVelocity() == 90,
+               "it sends the take's note on channel 2 at velocity 90");
+        check (on != events.end() && on->first > 0.15 && on->first < 0.3,
+               "after the gap, with no tone or count-in (" + juce::String (on != events.end() ? on->first : -1.0, 2) + " s)");
+        check (off != events.end() && on != events.end() && std::abs ((off->first - on->first) - 0.5) < 0.01,
+               "and releases it after the hold time (" + juce::String (off != events.end() && on != events.end() ? off->first - on->first : -1.0, 3) + " s)");
+        p.recorder.command ("stop", {});
+        runCollect (0.1, events, clock);
+
+        // Stopping while the note is held must release it
+        events.clear();
+        clock = 0;
+        p.recorder.command ("start", planFor (5.0));
+        runCollect (0.6, events, clock);
+        p.recorder.command ("stop", {});
+        runCollect (0.1, events, clock);
+        const int ons = (int) std::count_if (events.begin(), events.end(), [] (auto& e) { return e.second.isNoteOn(); });
+        const int offs = (int) std::count_if (events.begin(), events.end(), [] (auto& e) { return e.second.isNoteOff(); });
+        check (ons == 1 && offs == 1, "stopping mid-note sends the note-off (no hanging notes)");
+
+        // Normal sessions send nothing
+        events.clear();
+        auto quiet = planFor (0.5);
+        quiet["settings"].getDynamicObject()->setProperty ("midi", false);
+        p.recorder.command ("start", quiet);
+        runCollect (1.5, events, clock);
+        p.recorder.command ("stop", {});
+        check (events.empty(), "a session without MIDI mode sends no MIDI");
+        check (p.producesMidi(), "the plugin declares a MIDI output");
+        dir.deleteRecursively();
+    }
+
     p.releaseResources();
     std::cout << (failures == 0 ? "All checks passed" : juce::String (failures) + " check(s) failed") << std::endl;
     return failures == 0 ? 0 : 1;
