@@ -55,7 +55,10 @@ target_sources(mtyaSampler PRIVATE
     Source/PluginEditor.cpp
     Source/ParameterSpec.cpp
     Source/UiResources.cpp
-    Source/SampleRecorder.cpp)
+    Source/SampleRecorder.cpp
+    Source/InstrumentMap.cpp
+    Source/SamplerEngine.cpp
+    Source/SampleLoader.cpp)
 
 # ---------------------------------------------------------------------------
 # Web UI → BinaryData
@@ -112,3 +115,27 @@ target_link_libraries(mtyaSampler
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# ---------------------------------------------------------------------------
+# Engine tests: plays generated samples through SamplerEngine offline and checks the output.
+# cmake --build <build dir> --target mtyaEngineTests, then run it (exit code 1 = a check failed).
+# ---------------------------------------------------------------------------
+option(MTYA_BUILD_TESTS "Build the offline engine tests" ON)
+if(MTYA_BUILD_TESTS)
+    juce_add_console_app(mtyaEngineTests PRODUCT_NAME "mtyaEngineTests")
+    target_sources(mtyaEngineTests PRIVATE
+        tests/EngineTests.cpp
+        Source/InstrumentMap.cpp
+        Source/SamplerEngine.cpp)
+    target_compile_definitions(mtyaEngineTests PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_STANDALONE_APPLICATION=1)
+    target_link_libraries(mtyaEngineTests
+        PRIVATE
+            juce::juce_audio_formats
+            juce::juce_audio_processors
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags)
+endif()

@@ -5,8 +5,13 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
 ## Current state (start here)
 
 - **UI: done.** `ui/` has both pages (Main, Layers), and every control is bound to a parameter. It runs in a browser in preview mode (`cd ui && py -m http.server 8765`).
-- **C++ skeleton: done, not yet built on Windows.** It type-checks against JUCE 8.0.15 headers. The first job is to build it, load it in a DAW, and fix whatever the Windows build turns up.
-- **Audio engine: placeholder.** It plays a sine voice shaped by Env 1, just to prove that MIDI, parameters and meters work end to end.
+- **C++: builds on macOS** (VST3, CLAP, Standalone; `cmake --preset mac`). **Not yet built on Windows.** The first Windows job is to build it, load it in a DAW, and fix whatever the Windows build turns up.
+- **Sampler engine (roadmap 2–3): done, not yet tried in a DAW.**
+  - `Source/InstrumentMap.*`: instrument JSON → immutable zone map; `SampleCache` loads files into RAM and finds bare file names.
+  - `Source/SampleLoader.*`: background thread that builds maps and deletes old ones.
+  - `Source/SamplerEngine.*`: voices, round robin, trigger modes, voice modes, keyswitches, the five playback modes, Env 1 as the amp envelope.
+  - `tests/EngineTests.cpp` (`mtyaEngineTests` target): offline checks for all of the above. Run it after engine changes.
+  - How each layer field and playback mode behaves is written down in `docs/ui-spec.md` (Instrument JSON).
 - **Create page (sample-recording assistant): done.**
   - UI: `ui/js/create.js` and `ui/js/plan.js`, with a browser preview engine in `ui/js/mock-recorder.js`.
   - Engine: `Source/SampleRecorder.*`. It was compiled and run on Linux in a test program that simulated a full session; the takes saved, trimmed and normalized correctly, and an empty take was retried.
@@ -36,6 +41,9 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
    - Spoken prompts come from a voice pack (`Documents/mtyaSampler/VoicePack/*.wav`, one file per word, made by `tools/make-voice-pack.ps1`) and play through the plugin output. If any word is missing, the UI speaks the prompts with the browser's speech synthesis instead.
 7. **The UI is a fixed 1280×920 design scaled to fit the window** (`fitToWindow` in main.js). The editor keeps that aspect ratio.
 
+8. **Engine threading.** The loader thread parses the JSON and loads samples, then `SamplerEngine::publish` swaps the new map in through an atomic pointer. The audio thread keeps the old map in a `draining` slot until no voice points into it, then hands it back through a FIFO (`popRetired`) and the loader deletes it. Voices hold raw pointers into their map, so never free a map anywhere else.
+9. **One-shot means "play once, no loop"**: it still stops on key-up through the amp envelope (a piano needs that). Only release-trigger samples ignore note-off.
+
 ## Rules
 
 - **Never rename or remove a parameter id once it has shipped.** Hosts store automation and presets by id. Add new ids instead, and bump the `ParameterID` version if the meaning changes.
@@ -62,14 +70,16 @@ A VST3 + CLAP **sampler instrument** with sound-design features and a serious mu
    - Check that the knobs move with host automation and that undo works.
    - Check that the state is saved and restored.
    - Check that the on-screen keyboard plays the placeholder voice.
-2. **Sample engine (core):**
+2. **Sample engine (core): done** (see Current state). Left over: multi-out (`output` is parsed, everything plays on Main), disk streaming, and showing `rrPos` in the inspector.
+
+   Original brief:
    - Load the files named in each layer's `samples` with `AudioFormatManager`. Keep them in RAM first; disk streaming can come later.
    - Build a `ZoneMap` from the instrument JSON, then for each note decide which zones play: key and velocity ranges plus key/velocity crossfades.
    - Round robin modes: off, cycle, random, no-repeat. Each RR group keeps its own counter. `rrReset` decides when the counter goes back to the start.
    - Trigger modes: attack, release (uses `releaseVolume` and `releaseDecay`), legato, first.
    - Voices: polyphony per layer, choke groups, steal modes, poly/mono/legato voice modes, glide, keyswitch/articulation filtering.
    - Pitch from `root` and `keyTrack`, plus the `tune` and `fine` parameters. Volume, pan and output bus per layer (multi-out comes later).
-3. **Playback modes** (`play_mode`): one-shot, loop (with `loop_xfade`), ping-pong, slice (16 slices between start and end), and granular (the `grn_*` parameters; Freeze holds the position).
+3. **Playback modes: done.** (`play_mode`): one-shot, loop (with `loop_xfade`), ping-pong, slice (16 slices between start and end), and granular (the `grn_*` parameters; Freeze holds the position).
 4. **Sound design:**
    - Filter types (`flt_type`): LP24, LP12, BP, HP, Comb. `juce::dsp::StateVariableTPTFilter` or `LadderFilter` cover LP/BP/HP; the comb is custom.
    - 3 ADSRs: Env 1 = amp, Env 2 = filter (`flt_envamt`), Env 3 = mod.

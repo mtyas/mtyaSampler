@@ -14,11 +14,19 @@
       "inherits": "vs2022",
       "binaryDir": "${sourceDir}/build-uidev",
       "cacheVariables": { "MTYA_UI_DEV_SERVER": "ON" }
+    },
+    {
+      "name": "mac",
+      "displayName": "macOS (Ninja, Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-mac",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
     }
   ],
   "buildPresets": [
     { "name": "debug", "configurePreset": "vs2022", "configuration": "Debug" },
     { "name": "release", "configurePreset": "vs2022", "configuration": "Release" },
-    { "name": "uidev", "configurePreset": "vs2022-uidev", "configuration": "Debug" }
+    { "name": "uidev", "configurePreset": "vs2022-uidev", "configuration": "Debug" },
+    { "name": "mac-release", "configurePreset": "mac" }
   ]
 }

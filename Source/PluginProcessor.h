@@ -3,6 +3,8 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "SampleRecorder.h"
+#include "SamplerEngine.h"
+#include "SampleLoader.h"
 
 // mtyaSampler audio processor.
 //
@@ -11,8 +13,9 @@
 //  * The instrument: layers, mapping, round robin etc. Not automatable. Kept as JSON (schema in
 //    docs/ui-spec.md), edited by the Layers page, saved with the plugin state.
 //
-// The audio engine is a PLACEHOLDER (a sine voice shaped by Env 1) so the whole pipeline
-// (host → MIDI → voices → UI) can be tested before the sampler engine exists. See CLAUDE.md, Roadmap.
+// The audio engine is SamplerEngine (voices, round robin, trigger and playback modes); its
+// instrument maps are built from the JSON by SampleLoader on a background thread.
+// Filter, LFOs, FX and macros are still to come. See CLAUDE.md, Roadmap.
 class MtyaSamplerProcessor final : public juce::AudioProcessor,
                                    public juce::ChangeBroadcaster
 {
@@ -60,19 +63,20 @@ public:
     // Create page: the sample-recording assistant. It records from the plugin's audio input.
     SampleRecorder recorder;
 
+    // The sampler and the thread that loads its samples (declared after apvts: they read its parameters)
+    SamplerEngine engine;
+    SampleLoader loader;
+
     // Read by the editor's timer for meters/stats.
     std::atomic<float> meterL { 0.0f }, meterR { 0.0f };
     std::atomic<int> activeVoices { 0 };
     std::atomic<float> cpuLoad { 0.0f };
 
 private:
-    void updateVoiceParameters();
-
     mutable juce::CriticalSection instrumentLock;
     juce::String instrumentJson;
 
     juce::AudioBuffer<float> inputCopy;   // input saved before the buffer is cleared
-    juce::Synthesiser synth;   // TODO: replace placeholder voices with the sampler engine
     juce::AudioProcessLoadMeasurer loadMeasurer;
     std::atomic<float>* masterVol = nullptr;
 

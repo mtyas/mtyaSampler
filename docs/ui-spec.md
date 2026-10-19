@@ -68,7 +68,7 @@ Native functions (JS calls C++):
 
 Events (C++ → JS):
 - `instrumentChanged`: the instrument JSON.
-- `meters`: `{ l, r, voices, cpu }`, 30 per second.
+- `meters`: `{ l, r, voices, cpu, samples, missing }`, 30 per second. `samples` and `missing` count the loaded and not-found sample files in the current instrument.
 - `recorderState`: `{ status, phase, take, total, saved, lastSaved, count, phaseTime, phaseLen, recSec, maxSec, inDb, clip, voiceInUi, voicePack, peaks[] }`, 30 per second.
 - `recorderTake`: `{ index, file, path, lengthSec, peakDb, clipped, empty, skipped, peaks[], error? }`, once per take.
 - Planned: `peaks` (waveform `[min, max]` pairs).
@@ -99,7 +99,18 @@ Parameters use JUCE's relays. In JS, `getSliderState(id)`, `getToggleState(id)` 
 }
 ```
 
-Units: keys and keyswitch are MIDI notes (−1 = none), volume is in dB, pan runs −50…50, times are in ms, `keyTrack` and `velToVol` are percentages. `samples` holds one file per round-robin variation. Paths are relative to the preset/sample folder; that still needs deciding when import is built.
+Units: keys and keyswitch are MIDI notes (−1 = none), volume is in dB, pan runs −50…50, times are in ms, `keyTrack` and `velToVol` are percentages. `samples` holds one file per round-robin variation: a full path, or a bare file name looked up in the optional top-level `"sampleFolder"` (a full path), then under `Documents/mtyaSampler/Recordings` and `Documents/mtyaSampler/Samples` (recursively). Placeholders such as `(drop a sample)` and files that can't be found play a quiet sine at the layer's root.
+
+How the engine reads the layer fields:
+
+- **Fades** are centred on the zone edge: a layer with `velFade: 8` and `vlo: 64` fades in over velocities 60–68, so a neighbour ending at 63 with the same fade crosses over at equal power. There's no fade at 0 or 127.
+- **Round robin:** layers sharing an `rrGroup` share one counter and pick the same variation for a note, so velocity layers stay in step. An empty group name means the layer has its own counter.
+- **Trigger:** `release` layers play on key-up (always through to the end), at `releaseVolume`, fading by e^(−held ms ÷ `releaseDecay`) the longer the key was held (0 = no fade). `legato` plays only while another key is held, `first` only when none is.
+- **Voice:** `polyphony` and `steal` apply per layer. `mono` retriggers, `legato` keeps the voice and changes pitch; both return to the last key still held. `glide` slides from the previous note (in poly mode too, when above 0). `choke` > 0 cuts every other voice in the same choke group.
+- **Keyswitch:** a layer with a keyswitch only plays while that keyswitch (or another with the same articulation) was the last one pressed; the lowest one is active at first. Keyswitch notes make no sound. Layers with −1 always play.
+- `output` is read but everything plays on Main until multi-out is added.
+
+Playback modes (`play_mode`, global): **One-shot** plays Start→End once, stopping early on key-up via the amp envelope. **Loop** plays into the loop and repeats Loop Start→Loop End with an equal-power crossfade (`loop_xfade`, limited by the audio before the loop start). **Ping-pong** bounces between the loop points. **Slice** splits Start→End into 16; the key's distance from the root picks the slice (root = slice 1), played at its own pitch. **Granular** sprays grains (`grn_size`, `grn_density`, `grn_spray`, `grn_pitchrnd`) around a position that starts at `grn_pos` and moves at normal speed, or stays at `grn_pos` while Freeze is on. Release samples always play as one-shots. The amp envelope is Env 1; pitch bend is ±2 st; the sustain pedal (CC 64) holds notes.
 
 ## Parameters (from ui/params.json)
 

@@ -6,7 +6,9 @@ A sampler instrument with sound-design tools (granular engine, filter, 3 envelop
 
 **Create your own samples:** the Create page is a recording assistant. You choose an instrument preset, note range, how often to sample (every note, every 3 notes…), round robins, velocity layers and the longest take. It then guides you note by note: it announces the note, plays a reference tone and counts you in, then records what you play into the plugin's input. Each take is trimmed, saved as a WAV and mapped straight into the Layers page.
 
-**Status:** the UI is complete and wired to every parameter. The audio engine is a placeholder sine voice so the whole chain (host → MIDI → voices → UI) can be tested. The sampler engine is the next job; see [CLAUDE.md](CLAUDE.md), *Roadmap*.
+**Status:** the UI is complete and wired to every parameter. The sampler engine plays the layers: key/velocity mapping with crossfades, round robin, trigger modes, voice modes, keyswitches and all five playback modes (one-shot, loop, ping-pong, slice, granular). The filter, LFOs, FX and macros are next; see [CLAUDE.md](CLAUDE.md), *Roadmap*.
+
+**Where samples are found:** a layer's `samples` can be full paths or bare file names. Bare names are looked up in the instrument's `sampleFolder` (if set), then anywhere under `Documents\mtyaSampler\Recordings` and `Documents\mtyaSampler\Samples`, so takes from the Create page are found automatically. A file that can't be found plays a quiet sine at the layer's root, so you can still check the mapping; the header's `missing` count says how many.
 
 ![Main page](docs/screenshots/main.png)
 ![Layers page](docs/screenshots/layers.png)
@@ -73,11 +75,25 @@ Open <http://localhost:8765>. Everything works in "preview mode": the parameters
 
 To see UI changes inside the real plugin without rebuilding, build the `uidev` preset (`cmake --preset vs2022-uidev`, then `cmake --build --preset uidev`). It loads the UI from that local server instead of the copy built into the plugin.
 
+## Engine tests
+
+`tests/EngineTests.cpp` plays generated WAV files through the engine offline and checks pitch, round robin, velocity crossfades, trigger and voice modes, keyswitches and every playback mode. Build the `mtyaEngineTests` target and run it; it prints one line per check.
+
+On a Mac (handy for engine work; the plugin also builds there as VST3/CLAP/Standalone):
+
+```
+cmake --preset mac
+cmake --build --preset mac-release
+build-mac/mtyaEngineTests_artefacts/Release/mtyaEngineTests
+```
+
 ## Folder map
 
 ```
 CMakeLists.txt         build (JUCE + CLAP + embedded UI)
-Source/                C++: processor, editor (WebView host), parameter loader
+Source/                C++: processor, editor (WebView host), parameter loader,
+                       sampler engine (InstrumentMap, SamplerEngine, SampleLoader), recorder
+tests/                 offline engine tests
 ui/                    the interface: index.html, styles.css, js/, params.json, demo-layers.json
 docs/ui-spec.md        pages, controls, bridge API, layer schema, parameter table
 tools/                 make-voice-pack.ps1 (spoken prompts for the Create page)

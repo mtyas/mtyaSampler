@@ -212,6 +212,8 @@ void MtyaSamplerEditor::timerCallback()
     m->setProperty ("r", proc.meterR.load());
     m->setProperty ("voices", proc.activeVoices.load());
     m->setProperty ("cpu", proc.cpuLoad.load() * 100.0f);
+    m->setProperty ("samples", proc.loader.loadedSamples.load());
+    m->setProperty ("missing", proc.loader.missingSamples.load());
     browser.emitEventIfBrowserIsVisible ("meters", juce::var (m));
     browser.emitEventIfBrowserIsVisible ("recorderState", proc.recorder.getState());
 }

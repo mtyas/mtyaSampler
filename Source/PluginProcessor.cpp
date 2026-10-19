@@ -3,72 +3,17 @@
 #include "ParameterSpec.h"
 #include "UiResources.h"
 
-namespace
-{
-    // ---- PLACEHOLDER engine: a sine voice with Env 1 (Amp). Replace with the sampler. ----
-    struct PlaceholderSound final : juce::SynthesiserSound
-    {
-        bool appliesToNote (int) override { return true; }
-        bool appliesToChannel (int) override { return true; }
-    };
-
-    struct PlaceholderVoice final : juce::SynthesiserVoice
-    {
-        juce::ADSR adsr;
-        juce::ADSR::Parameters adsrParams;
-        double phase = 0.0, delta = 0.0;
-        float level = 0.0f;
-
-        bool canPlaySound (juce::SynthesiserSound* s) override { return dynamic_cast<PlaceholderSound*> (s) != nullptr; }
-
-        void startNote (int note, float velocity, juce::SynthesiserSound*, int) override
-        {
-            phase = 0.0;
-            delta = juce::MathConstants<double>::twoPi * juce::MidiMessage::getMidiNoteInHertz (note) / getSampleRate();
-            level = 0.15f * velocity;
-            adsr.setSampleRate (getSampleRate());
-            adsr.setParameters (adsrParams);
-            adsr.noteOn();
-        }
-
-        void stopNote (float, bool allowTailOff) override
-        {
-            if (allowTailOff) adsr.noteOff();
-            else { adsr.reset(); clearCurrentNote(); }
-        }
-
-        void pitchWheelMoved (int) override {}
-        void controllerMoved (int, int) override {}
-
-        void renderNextBlock (juce::AudioBuffer<float>& out, int start, int num) override
-        {
-            if (! isVoiceActive()) return;
-            adsr.setParameters (adsrParams);
-            for (int i = 0; i < num; ++i)
-            {
-                const auto s = (float) std::sin (phase) * level * adsr.getNextSample();
-                phase += delta;
-                for (int ch = 0; ch < out.getNumChannels(); ++ch)
-                    out.addSample (ch, start + i, s);
-                if (! adsr.isActive()) { clearCurrentNote(); break; }
-            }
-        }
-    };
-}
-
 MtyaSamplerProcessor::MtyaSamplerProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput  ("Record In", juce::AudioChannelSet::stereo(), true)   // used by the Create page
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       paramSpec (ParameterSpec::load()),
-      apvts (*this, nullptr, "PARAMS", ParameterSpec::createLayout (paramSpec))
+      apvts (*this, nullptr, "PARAMS", ParameterSpec::createLayout (paramSpec)),
+      engine (SamplerEngine::Params::fromApvts (apvts)),
+      loader (engine)
 {
     masterVol = apvts.getRawParameterValue ("master_vol");
-    instrumentJson = UiResources::getText ("demo-layers.json");
-
-    for (int i = 0; i < 32; ++i)
-        synth.addVoice (new PlaceholderVoice());
-    synth.addSound (new PlaceholderSound());
+    setInstrumentJson (UiResources::getText ("demo-layers.json"), false);
 }
 
 bool MtyaSamplerProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -81,20 +26,11 @@ bool MtyaSamplerProcessor::isBusesLayoutSupported (const BusesLayout& layouts) c
 
 void MtyaSamplerProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    synth.setCurrentPlaybackSampleRate (sampleRate);
+    engine.prepare (sampleRate);
     uiMidi.reset (sampleRate);
     loadMeasurer.reset (sampleRate, samplesPerBlock);
     inputCopy.setSize (2, juce::jmax (1, samplesPerBlock) * 2);
     recorder.prepare (sampleRate, samplesPerBlock);
-}
-
-void MtyaSamplerProcessor::updateVoiceParameters()
-{
-    auto raw = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
-    juce::ADSR::Parameters p { raw ("env1_attack"), raw ("env1_decay"), raw ("env1_sustain") / 100.0f, raw ("env1_release") };
-    for (int i = 0; i < synth.getNumVoices(); ++i)
-        if (auto* v = dynamic_cast<PlaceholderVoice*> (synth.getVoice (i)))
-            v->adsrParams = p;
 }
 
 void MtyaSamplerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -113,18 +49,18 @@ void MtyaSamplerProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     buffer.clear();
     uiMidi.removeNextBlockOfMessages (midi, buffer.getNumSamples());
 
-    updateVoiceParameters();
-    synth.renderNextBlock (buffer, midi, 0, buffer.getNumSamples());
+    bool playing = false;
+    if (auto* head = getPlayHead())
+        if (auto position = head->getPosition())
+            playing = position->getIsPlaying();
+    engine.process (buffer, midi, playing);
 
     buffer.applyGain (masterVol->load() / 100.0f);
 
     // Guide track (prompts, tone, count-in) and optional input monitoring; not affected by Master.
     recorder.process (inputView, buffer, numSamples);
 
-    int voices = 0;
-    for (int i = 0; i < synth.getNumVoices(); ++i)
-        voices += synth.getVoice (i)->isVoiceActive() ? 1 : 0;
-    activeVoices.store (voices);
+    activeVoices.store (engine.getActiveVoices());
 
     // Simple peak meters with fall-off, read by the editor
     const auto n = buffer.getNumSamples();
@@ -151,7 +87,7 @@ void MtyaSamplerProcessor::setInstrumentJson (const juce::String& json, bool not
         const juce::ScopedLock sl (instrumentLock);
         instrumentJson = json;
     }
-    // TODO: parse into the engine's zone map (off the audio thread) and swap it in atomically.
+    loader.load (json);   // builds the zone map and loads samples off the audio thread
     if (notifyUi)
         sendChangeMessage();
 }
