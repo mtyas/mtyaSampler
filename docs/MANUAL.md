@@ -141,6 +141,8 @@ The Filter, Env and LFO panels each have a **Layer** switch in the top-right cor
 
 So one layer can have a dark, slowly opening filter while another stays bright, or each layer can wobble at its own LFO rate. The effects and the macros are always shared by the whole instrument.
 
+![A layer with its own filter and LFO](screenshots/layer-settings.png)
+
 ### Modulation: choosing what moves what
 
 The tag at the right of the Env and LFO panels shows where that envelope or LFO goes, for example **→ Grain Pos +50%**. Click it to change it:
@@ -205,6 +207,8 @@ The six effects run in a row, left to right:
 | **Delay** | Time, or **Sync** to the host tempo with a division (1/32 to 1/1, dotted and triplet); Feedback, Mix, **Ping-pong**, Tone (repeats get darker) |
 | **Reverb** | Mix, Size, Damping, Width, Pre-delay |
 | **Tape** | Wow (slow pitch drift), Flutter (fast wobble), Drive (tape saturation), Tone (high-frequency loss), Mix. Off by default. |
+
+![Tape settings](screenshots/tape.png)
 
 The order is saved with the preset.
 

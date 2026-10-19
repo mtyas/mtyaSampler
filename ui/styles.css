@@ -500,3 +500,10 @@ td.grp { font-family: var(--font); font-size: 12px; color: var(--muted); }
 .route-sec-head b { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
 .route-sec-head .meta { white-space: normal; text-align: right; }
 .add-route { align-self: flex-start; }
+
+/* Sample editor header: the file details give way (ellipsis) so the controls never collide */
+.editor .ph { gap: 10px; }
+.editor .ph-left { flex: 1; min-width: 0; }
+.editor .ph-left .file { flex-shrink: 0; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+#sel-file-meta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.root-tag, .rr-pick, .own-toggle { flex-shrink: 0; }

@@ -1,5 +1,7 @@
 # mtyaSampler
 
+[![Build](https://github.com/mtyas/mtyaSampler/actions/workflows/build.yml/badge.svg)](https://github.com/mtyas/mtyaSampler/actions/workflows/build.yml)
+
 A free, open-source sampler instrument (VST3, CLAP and Standalone) for sound designers and musicians: a granular engine, analogue-style filters that self-oscillate, a modulation matrix, a reorderable FX chain and a full multi-sample layer editor, plus a recording assistant that turns your own instrument (or a hardware synth, hands-free over MIDI) into a playable sampled instrument.
 
 ![Main page](docs/screenshots/main.png)
@@ -21,15 +23,25 @@ A free, open-source sampler instrument (VST3, CLAP and Standalone) for sound des
 | Layers | Create | Mod matrix |
 |---|---|---|
 | ![Layers page](docs/screenshots/layers.png) | ![Create page](docs/screenshots/create.png) | ![Modulation matrix](docs/screenshots/mod-matrix.png) |
+| **Per-layer filter and LFOs** | **Tape** | **Presets** |
+| ![Per-layer settings](docs/screenshots/layer-settings.png) | ![Tape effect](docs/screenshots/tape.png) | ![Preset browser](docs/screenshots/presets.png) |
 
 ## Install
 
-There are no ready-made downloads yet: build it from source (below), then copy the plugin files:
+Download the zip for your system from the [latest release](https://github.com/mtyas/mtyaSampler/releases/latest), or the newest unreleased build from [Actions](https://github.com/mtyas/mtyaSampler/actions/workflows/build.yml) (open the latest green run, then *Artifacts*; needs a GitHub login). Each zip has the VST3, the CLAP and the Standalone app. Copy the plugin files to:
 
-| | Windows | macOS |
-|---|---|---|
-| VST3 | `C:\Program Files\Common Files\VST3\` | `~/Library/Audio/Plug-Ins/VST3/` |
-| CLAP | `C:\Program Files\Common Files\CLAP\` | `~/Library/Audio/Plug-Ins/CLAP/` |
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| VST3 | `C:\Program Files\Common Files\VST3\` | `~/Library/Audio/Plug-Ins/VST3/` | `~/.vst3/` |
+| CLAP | `C:\Program Files\Common Files\CLAP\` | `~/Library/Audio/Plug-Ins/CLAP/` | `~/.clap/` |
+
+**macOS:** the builds aren't notarised by Apple, so the first time macOS may say the plugin "is damaged" or "can't be opened". Remove the download quarantine once from Terminal (then rescan plugins in your DAW):
+
+```bash
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/mtyaSampler.vst3 ~/Library/Audio/Plug-Ins/CLAP/mtyaSampler.clap
+```
+
+**Windows:** the web UI needs the Microsoft Edge WebView2 runtime, which Windows 10 and 11 already have. **Linux:** it needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Debian/Ubuntu); the builds are made on Ubuntu 22.04.
 
 The Standalone app runs without a DAW. Your presets, recordings and samples live in `Documents/mtyaSampler/`.
 
@@ -59,6 +71,16 @@ cmake --build --preset mac-release
 ```
 
 The plugins are in `build-mac/mtyaSampler_artefacts/Release/`.
+
+**Linux** (Ubuntu 22.04 or newer; other distributions need the same libraries):
+
+```bash
+sudo apt install build-essential cmake ninja-build pkg-config libasound2-dev libjack-jackd2-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libgtk-3-dev libwebkit2gtk-4.1-dev libglu1-mesa-dev
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+Every push to `main` is also built and tested on all three systems by [GitHub Actions](.github/workflows/build.yml); pushing a tag like `v0.1.0` publishes the zips as a release.
 
 **Tests:** `build-mac/mtyaEngineTests_artefacts/Release/mtyaEngineTests` (the sampler engine, offline) and `mtyaPluginTests` (the whole plugin: buses, saved state, MIDI auto-sampling). Each prints one line per check.
 

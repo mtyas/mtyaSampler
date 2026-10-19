@@ -43,6 +43,7 @@ juce_add_plugin(mtyaSampler
     IS_MIDI_EFFECT               FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS  TRUE
     NEEDS_WEBVIEW2               TRUE
+    NEEDS_WEB_BROWSER            TRUE   # Linux: links webkit2gtk + GTK for the web UI (no effect elsewhere)
     VST3_CATEGORIES              Instrument Sampler
     COPY_PLUGIN_AFTER_BUILD      FALSE)
 

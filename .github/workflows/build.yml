@@ -1,0 +1,111 @@
+# Builds mtyaSampler (VST3, CLAP, Standalone) on macOS, Windows and Linux, runs the offline tests, and
+# keeps a zip per platform as a download on the run. Pushing a tag like v0.1.0 also publishes those
+# zips on a GitHub Release.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-14
+            # One plugin for Apple Silicon and Intel Macs
+            configure: -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          - name: Windows
+            os: windows-2022
+            configure: -G "Visual Studio 17 2022" -A x64
+          - name: Linux
+            os: ubuntu-22.04
+            configure: -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config xvfb \
+            libasound2-dev libjack-jackd2-dev libfreetype6-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libglu1-mesa-dev
+
+      - name: WebView2 SDK
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Register-PackageSource -ProviderName NuGet -Name nugetRepository -Location https://www.nuget.org/api/v2 -Force
+          Install-Package Microsoft.Web.WebView2 -Scope CurrentUser -Source nugetRepository -Force
+
+      - name: Configure
+        shell: bash
+        run: cmake -S . -B build ${{ matrix.configure }}
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Engine tests
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then RUN="xvfb-run -a"; fi
+          $RUN build/mtyaEngineTests_artefacts/Release/mtyaEngineTests
+
+      - name: Plugin tests
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then RUN="xvfb-run -a"; fi
+          $RUN build/mtyaPluginTests_artefacts/Release/mtyaPluginTests
+
+      - name: Sign for local use (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # Ad-hoc signature over the whole bundle (not notarised: see the README for the first launch)
+          for b in build/mtyaSampler_artefacts/Release/VST3/mtyaSampler.vst3 \
+                   build/mtyaSampler_artefacts/Release/CLAP/mtyaSampler.clap \
+                   build/mtyaSampler_artefacts/Release/Standalone/mtyaSampler.app; do
+            codesign --force --deep --sign - "$b"
+            codesign --verify --strict "$b"
+          done
+
+      - name: Package
+        shell: bash
+        run: |
+          out="mtyaSampler-${{ matrix.name }}"
+          mkdir -p "dist/$out"
+          cp -R build/mtyaSampler_artefacts/Release/VST3 build/mtyaSampler_artefacts/Release/CLAP build/mtyaSampler_artefacts/Release/Standalone "dist/$out/"
+          cp LICENSE README.md "dist/$out/"
+          cd dist && cmake -E tar cf "$out.zip" --format=zip "$out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mtyaSampler-${{ matrix.name }}
+          path: dist/mtyaSampler-${{ matrix.name }}.zip
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
