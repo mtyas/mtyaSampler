@@ -269,6 +269,62 @@ static LayerEngine parseEngine (const juce::var& e)
     return r;
 }
 
+// A layer's own filter / envelopes / LFOs, in parameter units (flt_cutoff Hz, flt_reso %, env1_attack s,
+// env1_sustain %, lfo1_depth %, lfo1_phase degrees, lfo1_fade ms, …)
+static LayerFilter parseFilter (const juce::var& f)
+{
+    LayerFilter r;
+    if (! f.isObject() || ! (bool) f["own"])
+        return r;
+    auto num = [&f] (const char* k, double fallback, double lo, double hi) { return juce::jlimit (lo, hi, f[k].isVoid() ? fallback : (double) f[k]); };
+    r.own = true;
+    r.type = (int) num ("flt_type", 1, 0, 4);
+    r.cutoff = (float) num ("flt_cutoff", 20000, 20, 20000);
+    r.reso = (float) (num ("flt_reso", 0, 0, 100) * 0.01);
+    r.driveDb = (float) num ("flt_drive", 0, 0, 36);
+    r.envAmt = (float) (num ("flt_envamt", 0, -100, 100) * 0.01);
+    return r;
+}
+
+static LayerEnvs parseEnvs (const juce::var& e)
+{
+    LayerEnvs r;
+    if (! e.isObject() || ! (bool) e["own"])
+        return r;
+    r.own = true;
+    for (int n = 0; n < 3; ++n)
+    {
+        const auto pre = "env" + juce::String (n + 1) + "_";
+        auto num = [&] (const char* k, double fallback, double lo, double hi)
+        {
+            const auto& v = e[juce::Identifier (pre + k)];
+            return (float) juce::jlimit (lo, hi, v.isVoid() ? fallback : (double) v);
+        };
+        r.env[n] = { num ("attack", 0.005, 0.0005, 30), num ("decay", 0.3, 0.0005, 30), num ("sustain", 100, 0, 100) * 0.01f, num ("release", 0.3, 0.0005, 60) };
+    }
+    return r;
+}
+
+static LayerLfos parseLfos (const juce::var& e)
+{
+    LayerLfos r;
+    if (! e.isObject() || ! (bool) e["own"])
+        return r;
+    r.own = true;
+    for (int n = 0; n < 4; ++n)
+    {
+        const auto pre = "lfo" + juce::String (n + 1) + "_";
+        auto num = [&] (const char* k, double fallback, double lo, double hi)
+        {
+            const auto& v = e[juce::Identifier (pre + k)];
+            return juce::jlimit (lo, hi, v.isVoid() ? fallback : (double) v);
+        };
+        r.lfo[n] = { (int) num ("shape", 0, 0, 4), (float) num ("rate", 1, 0.001, 100), (float) (num ("depth", 0, 0, 100) * 0.01),
+                     (float) (num ("phase", 0, 0, 360) / 360.0), (float) num ("fade", 0, 0, 30000) };
+    }
+    return r;
+}
+
 static void parseRoutes (const juce::var& list, const juce::StringArray& paramIds, std::vector<ModRoute>& out)
 {
     const auto* routes = list.getArray();
@@ -395,6 +451,13 @@ std::unique_ptr<InstrumentMap> buildInstrumentMap (const juce::var& json, Sample
             ++(s->missing ? map->missingSamples : map->loadedSamples);
 
         layer.engine = parseEngine (l["engine"]);
+        layer.filter = parseFilter (l["filter"]);
+        layer.envs = parseEnvs (l["envs"]);
+        layer.lfos = parseLfos (l["lfos"]);
+        // This layer's own routes: voice targets only (a knob is shared by every layer)
+        parseRoutes (l["modRoutes"], paramIds, layer.routes);
+        layer.routes.erase (std::remove_if (layer.routes.begin(), layer.routes.end(), [] (const ModRoute& r) { return r.target < 0; }),
+                            layer.routes.end());
 
         if ((bool) l["normalize"])
         {

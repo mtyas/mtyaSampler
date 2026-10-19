@@ -1,4 +1,4 @@
-import { createBridge, ENGINE_IDS } from './bridge.js';
+import { createBridge, LAYER_GROUPS } from './bridge.js';
 import { knob, hslider, segmented, toggle, tabs, setAppScale } from './controls.js';
 import { setupDisplays } from './displays.js';
 import { setupLayers, noteName } from './layers.js';
@@ -60,7 +60,8 @@ async function boot() {
 
   // ---------- displays + tabs ----------
   const displays = setupDisplays(bridge);
-  const mod = setupModMatrix(bridge);
+  const modCtx = { layer: () => null };   // pointed at the selected layer once the Layers page exists
+  const mod = setupModMatrix(bridge, modCtx);
   tabs($('env-tabs'), 'env', (n) => { displays.setEnv(n); mod.setEnv(n); });
   tabs($('lfo-tabs'), 'lfo', (n) => { displays.setLfo(n); mod.setLfo(n); });
 
@@ -180,37 +181,47 @@ async function boot() {
       return r;
     },
     // The selected layer changed (or its samples did): the sample editor follows it
-    layerChanged: (l) => { if (regions) regions.load(l); bridge.refreshEngineScope(); renderOwn(); },
+    layerChanged: (l) => { if (regions) regions.load(l); bridge.refreshEngineScope(); renderOwn(); if (mod) mod.refresh(); },
     selectVariation: (i) => { if (regions) regions.select(i); },
     openEditor: () => showPage('main')
   };
   let regions = null;
   let layers = null;   // set just below; the Layers page reports its first selection while it's being set up
 
-  // ---------- per-layer engine settings ("Own settings") ----------
-  const ownBtn = $('own-engine');
+  // ---------- per-layer settings: "Own settings" (sample + granular) and the Layer switches ----------
+  // in the Filter, Env and LFO displays. Each turns a group of knobs into the selected layer's own copy.
+  const GROUP_NAMES = { engine: 'sample settings', filter: 'filter', envs: 'envelopes', lfos: 'LFOs' };
+  const ownButtons = [...document.querySelectorAll('[data-own]')];
   function renderOwn() {
     const l = layers ? layers.current() : null;
-    ownBtn.setAttribute('aria-pressed', String(!!(l && l.engine && l.engine.own)));
-    ownBtn.disabled = !l;
+    ownButtons.forEach((b) => {
+      const g = b.dataset.own;
+      b.setAttribute('aria-pressed', String(!!(l && l[g] && l[g].own)));
+      b.disabled = !l;
+    });
   }
-  ownBtn.onclick = () => {
-    const l = layers.current();
-    if (!l) return;
-    const inst = JSON.parse(JSON.stringify(bridge.getInstrument()));
-    const t = inst.layers.find((x) => x.id === l.id);
-    if (t.engine && t.engine.own) t.engine.own = false;                 // follow the instrument again (keeps the copy)
-    else if (t.engine) t.engine.own = true;                             // back to the layer's previous settings
-    else {
-      t.engine = { own: true };                                         // start from the instrument's current values
-      for (const id of ENGINE_IDS) t.engine[id] = bridge.globalParam(id).getValue();
-    }
-    bridge.setInstrument(inst).then(() => { bridge.refreshEngineScope(); renderOwn(); });
-    ui.toast(t.engine.own ? `“${t.name}” now has its own sample settings` : `“${t.name}” follows the instrument's knobs again`);
-  };
+  ownButtons.forEach((btn) => {
+    btn.onclick = () => {
+      const l = layers.current();
+      if (!l) return;
+      const g = btn.dataset.own;
+      const inst = JSON.parse(JSON.stringify(bridge.getInstrument()));
+      const t = inst.layers.find((x) => x.id === l.id);
+      if (t[g] && t[g].own) t[g].own = false;                 // follow the instrument again (keeps the copy)
+      else if (t[g]) t[g].own = true;                         // back to the layer's previous settings
+      else {
+        t[g] = { own: true };                                 // start from the instrument's current values
+        for (const id of LAYER_GROUPS[g]) t[g][id] = bridge.globalParam(id).getValue();
+      }
+      bridge.setInstrument(inst).then(() => { bridge.refreshEngineScope(); renderOwn(); if (mod) mod.refresh(); });
+      ui.toast(t[g].own ? `“${t.name}” now has its own ${GROUP_NAMES[g]}` : `“${t.name}” uses the instrument's ${GROUP_NAMES[g]} again`);
+    };
+  });
 
   layers = setupLayers(bridge, ui);
   bridge.setEngineScope(() => layers.current());
+  modCtx.layer = () => layers.current();
+  mod.refresh();
   renderOwn();
   const presets = setupPresets(bridge, ui);
   setupAbout(bridge);

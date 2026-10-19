@@ -137,6 +137,8 @@ How the engine reads the layer fields:
 - **Keyswitch:** a layer with a keyswitch only plays while that keyswitch (or another with the same articulation) was the last one pressed; the lowest one is active at first. Keyswitch notes make no sound. Layers with −1 always play.
 - `output`: Bus 2–4 play on those plugin outputs when the host has switched them on (they skip the FX chain and Master); otherwise on Main.
 - `normalize: true` applies a gain so the layer's loudest sample peaks at 0 dBFS (the files aren't changed).
+- `filter`, `envs`, `lfos`: the same pattern for the filter (`flt_*`), Env 1–3 (`env1_attack` …) and LFO 1–4 (`lfo1_shape` …), in parameter units (`LayerFilter`, `LayerEnvs`, `LayerLfos`; `filterOf` / `envsOf` / `lfosOf` in the engine). The UI switches are the **Layer** buttons in the Filter, Env and LFO displays.
+- `modRoutes` on a layer: extra routes for that layer only, voice targets only (`Layer::routes`), applied per voice on top of the instrument's.
 - `engine`: `{ "own": true, "play_mode", "stretch_mode", "time_speed", "formant", "tune", "fine", "loop_xfade", "grn_pos", "grn_size", "grn_density", "grn_spray", "grn_pitchrnd", "grn_freeze" }` in parameter units. With `own` true the layer uses these instead of the instrument's knobs (`LayerEngine`; in the UI, `bridge.param()` returns a `ScopedParam` for these ids that edits the selected layer's copy). With `own` false (or absent) it follows the knobs; the copy is kept.
 
 Playback modes (`play_mode`, global): **One-shot** plays the sample's start→end once, stopping early on key-up via the amp envelope. **Loop** plays into the loop and repeats Loop Start→Loop End with an equal-power crossfade (`loop_xfade`, limited by the audio before the loop start). **Ping-pong** bounces between the loop points. **Slice** splits Start→End into 16; the key's distance from the root picks the slice (root = slice 1), played at its own pitch. **Granular** sprays grains (`grn_size`, `grn_density`, `grn_spray`, `grn_pitchrnd`) around a position that starts at `grn_pos` and moves at normal speed, or stays at `grn_pos` while Freeze is on. Release samples always play as one-shots. Pitch bend is ±2 st; the sustain pedal (CC 64) holds notes.
@@ -164,7 +166,7 @@ Sound design (per voice: sample → filter with drive → modulated pan → Env 
 ]
 ```
 
-Sources: `env1`, `env2`, `env3` (0…1), `lfo1`…`lfo4` (−1…1 × depth), `velocity` (0…1), `key` ((note − 60) / 60, "key track"), and the global ones `macro1`…`macro4`, `modwheel`, `aftertouch` (0…1). Amount is −100…100 %. Any source can target any voice target or any float parameter; per-voice sources moving a parameter use the most recently started note.
+Sources: `env1`, `env2`, `env3` (0…1), `lfo1`…`lfo4` (−1…1 × depth) — the playing layer's own when it has them, otherwise the instrument's —, `cenv2`, `cenv3`, `clfo1`…`clfo4` (always the instrument's, "Common"), `velocity` (0…1), `key` ((note − 60) / 60, "key track"), and the global ones `macro1`…`macro4`, `modwheel`, `aftertouch` (0…1). Amount is −100…100 %. Any source can target any voice target or any float parameter; per-voice sources moving a parameter use the most recently started note.
 
 | Target | 100 % means |
 |---|---|

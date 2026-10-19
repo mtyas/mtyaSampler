@@ -761,6 +761,74 @@ int main()
                "the other layer follows the instrument's knobs (" + juce::String (rig.hz (0.1, 0.4), 0) + " Hz, one-shot resampled: 2 s then stops)");
     }
 
+    std::cout << "Per-layer filter, envelopes, LFOs and routes" << std::endl;
+    {
+        const auto s2000p = sine (dir, "p2000.wav", 2000.0, 1.0, 44100.0, 0.1f);
+        // Two layers, A (keys 0–59) and B (60–127), same 2 kHz sample; extra JSON for A, B and the instrument
+        auto twoLayers = [&] (const juce::String& extraA, const juce::String& extraB, const juce::String& instExtra, const juce::File& smp)
+        {
+            return instrument ({ layer (juce::String ("\"id\":1,\"lo\":0,\"hi\":59,\"root\":48,") + extraA + base + ",\"samples\":[" + path (smp) + "]"),
+                                 layer (juce::String ("\"id\":2,\"lo\":60,\"hi\":127,\"root\":60,") + extraB + base + ",\"samples\":[" + path (smp) + "]") }, instExtra);
+        };
+        auto levelOf = [] (Rig& rig, int note, double secs, double from, double to)
+        {
+            rig.on (note); rig.run (secs);
+            const auto level = rig.rms (from, to);
+            rig.off (note); rig.run (0.2);
+            return level;
+        };
+
+        {
+            Rig rig (twoLayers (R"("filter":{"own":true,"flt_type":0,"flt_cutoff":200,"flt_reso":0,"flt_drive":0,"flt_envamt":0},)", "", "", s2000p));
+            const auto a = levelOf (rig, 48, 0.3, 0.1, 0.3), b = levelOf (rig, 60, 0.3, 0.1, 0.3);
+            check (juce::Decibels::gainToDecibels (a / b) < -40, "a layer's own filter (LP24 at 200 Hz) only darkens that layer ("
+                       + juce::String (juce::Decibels::gainToDecibels (a / b), 0) + " dB vs the other)");
+        }
+        {
+            // Layer A has its own envelopes with a slow attack; B uses the instrument's fast one
+            Rig rig (twoLayers (R"("envs":{"own":true,"env1_attack":0.5,"env1_decay":0.1,"env1_sustain":100,"env1_release":0.01},)", "", "", s200));
+            const auto a = levelOf (rig, 48, 0.1, 0.02, 0.06), b = levelOf (rig, 60, 0.1, 0.02, 0.06);
+            check (a < b * 0.3f, "a layer's own Env 1 (slow attack) shapes only that layer");
+        }
+        {
+            // Instrument routes: LFO 2 -> pan. Layer A has its own LFOs (LFO 2 square, full depth); B uses the instrument's (depth 0)
+            Rig rig (twoLayers (R"("lfos":{"own":true,"lfo2_shape":3,"lfo2_rate":1,"lfo2_depth":100,"lfo2_phase":0,"lfo2_fade":0},)", "",
+                                R"(,"modRoutes":[{"source":"lfo2","target":"pan","amount":100}])", s200));
+            rig.on (48); rig.run (0.4);
+            const auto aLeft = rig.rms (0.05, 0.4, 0), aRight = rig.rms (0.05, 0.4, 1);
+            rig.off (48); rig.run (0.2);
+            rig.on (60); rig.run (0.4);
+            const auto bLeft = rig.rms (0.05, 0.4, 0), bRight = rig.rms (0.05, 0.4, 1);
+            check (aLeft < 1e-3f && aRight > 0.2f && std::abs (bLeft - bRight) < 1e-3f, "\"LFO 2\" means the layer's own LFO 2 when it has one (A pans, B doesn't)");
+        }
+        {
+            // Layer A has its own (silent) LFOs but a layer route from the *common* LFO 1 to pitch
+            Rig rig (twoLayers (R"("lfos":{"own":true,"lfo1_depth":0},"modRoutes":[{"source":"clfo1","target":"pitch","amount":50}],)", "",
+                                R"(,"modRoutes":[])", s200));
+            rig.fp.set ("lfo1_shape", 3);
+            rig.fp.set ("lfo1_depth", 100);
+            rig.fp.set ("lfo1_rate", 2);
+            rig.on (48); rig.run (0.5);
+            const auto up = rig.hz (0.03, 0.24), down = rig.hz (0.28, 0.49);
+            rig.off (48); rig.run (0.2);
+            rig.on (60); rig.run (0.5);
+            const auto bSteady = rig.hz (0.03, 0.49);
+            check (near (up, 400, 6) && near (down, 100, 3) && near (bSteady, 200, 3),
+                   "Common LFO 1 reaches a layer with its own LFOs, through that layer's own route only (" + juce::String (up, 0) + " / " + juce::String (down, 0) + " Hz; other layer " + juce::String (bSteady, 0) + " Hz)");
+        }
+        {
+            // A layer route from a macro: only that layer moves
+            Rig rig (twoLayers (R"("modRoutes":[{"source":"macro1","target":"pitch","amount":50}],)", "", R"(,"modRoutes":[])", s200));
+            rig.fp.set ("macro1", 100);
+            rig.on (48); rig.run (0.3);
+            const auto a = rig.hz (0.05, 0.29);
+            rig.off (48); rig.run (0.2);
+            rig.on (60); rig.run (0.3);
+            const auto b = rig.hz (0.05, 0.29);
+            check (near (a, 400, 6) && near (b, 200, 3), "a layer's own route (Macro 1 -> Pitch) moves only that layer (" + juce::String (a, 0) + " / " + juce::String (b, 0) + " Hz)");
+        }
+    }
+
     std::cout << "Playheads" << std::endl;
     {
         // Layers made in the UI get ids from Date.now(), far beyond 32 bits: they must come back unchanged

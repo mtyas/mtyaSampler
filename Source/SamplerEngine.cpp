@@ -189,6 +189,7 @@ void SamplerEngine::readBlockParams()
     }
     source[Mod::modWheel] = modWheel;
     source[Mod::aftertouch] = aftertouch;
+    globalSource = source;
 
     // Per-voice sources moving a whole-instrument knob follow the most recently started note
     const Voice* newest = nullptr;
@@ -200,8 +201,14 @@ void SamplerEngine::readBlockParams()
         source[Mod::env1] = newest->env1Value;
         source[Mod::env2] = newest->env2Value;
         source[Mod::env3] = newest->env3Value;
+        const bool ownEnvs = newest->layer->envs.own, ownLfos = newest->layer->lfos.own;
+        source[Mod::cenv2] = ownEnvs ? newest->commonEnv2Value : newest->env2Value;
+        source[Mod::cenv3] = ownEnvs ? newest->commonEnv3Value : newest->env3Value;
         for (int i = 0; i < 4; ++i)
+        {
             source[(size_t) (Mod::lfo1 + i)] = newest->lfos[i].value;
+            source[(size_t) (Mod::clfo1 + i)] = ownLfos ? newest->commonLfos[i].value : newest->lfos[i].value;
+        }
         source[Mod::velocity] = (float) newest->velocity / 127.0f;
         source[Mod::key] = (float) (newest->note - 60) / 60.0f;
     }
@@ -237,20 +244,20 @@ void SamplerEngine::readBlockParams()
     {
         return { get (knob[0], 0.005f), get (knob[1], 0.1f), get (knob[2], 100) * 0.01f, get (knob[3], 0.1f) };
     };
-    bp.env  = adsr (ix.env1);
-    bp.env2 = adsr (ix.env2);
-    bp.env3 = adsr (ix.env3);
+    bp.envs.env[0] = adsr (ix.env1);
+    bp.envs.env[1] = adsr (ix.env2);
+    bp.envs.env[2] = adsr (ix.env3);
 
     // With no filter parameters (tests), the defaults leave the sound untouched.
-    bp.fltType = juce::jlimit (0, 4, juce::roundToInt (get (ix.fltType, 1)));
-    bp.cutoff  = get (ix.fltCutoff, 20000);
-    bp.reso    = juce::jlimit (0.0f, 1.0f, get (ix.fltReso, 0) * 0.01f);
-    bp.driveDb = juce::jmax (0.0f, get (ix.fltDrive, 0));
-    bp.envAmt  = get (ix.fltEnvAmt, 0) * 0.01f;
+    bp.filter.type    = juce::jlimit (0, 4, juce::roundToInt (get (ix.fltType, 1)));
+    bp.filter.cutoff  = get (ix.fltCutoff, 20000);
+    bp.filter.reso    = juce::jlimit (0.0f, 1.0f, get (ix.fltReso, 0) * 0.01f);
+    bp.filter.driveDb = juce::jmax (0.0f, get (ix.fltDrive, 0));
+    bp.filter.envAmt  = get (ix.fltEnvAmt, 0) * 0.01f;
     for (size_t n = 0; n < 4; ++n)
     {
         const auto& l = ix.lfo[n];
-        bp.lfo[n] = { juce::jlimit (0, 4, juce::roundToInt (get (l[0], 0))), get (l[1], 1), get (l[2], 0) * 0.01f,
+        bp.lfos.lfo[n] = { juce::jlimit (0, 4, juce::roundToInt (get (l[0], 0))), get (l[1], 1), get (l[2], 0) * 0.01f,
                       get (l[3], 0) / 360.0f, get (l[4], 0) };
     }
 }
@@ -281,9 +288,12 @@ void SamplerEngine::process (juce::AudioBuffer<float>& main, juce::AudioBuffer<f
     for (auto& v : voices)
         if (v.active)
         {
-            v.env.setParameters (bp.env);
-            v.env2.setParameters (bp.env2);
-            v.env3.setParameters (bp.env3);
+            const auto& envs = envsOf (*v.layer);
+            v.env.setParameters (envs.env[0]);
+            v.env2.setParameters (envs.env[1]);
+            v.env3.setParameters (envs.env[2]);
+            v.commonEnv2.setParameters (bp.envs.env[1]);
+            v.commonEnv3.setParameters (bp.envs.env[2]);
             updateRegion (v);
         }
 
@@ -557,6 +567,8 @@ void SamplerEngine::releaseKey (int note)
         v.env.noteOff();
         v.env2.noteOff();
         v.env3.noteOff();
+        v.commonEnv2.noteOff();
+        v.commonEnv3.noteOff();
     }
 
     // Release triggers: quieter the longer the key was held.
@@ -695,7 +707,9 @@ SamplerEngine::Voice* SamplerEngine::startVoice (const InstrumentMap& srcMap, co
     v.gainL = g * layer.panL;
     v.gainR = g * layer.panR;
 
-    for (auto [env, p] : { std::pair { &v.env, &bp.env }, { &v.env2, &bp.env2 }, { &v.env3, &bp.env3 } })
+    const auto& envs = envsOf (layer);
+    for (auto [env, p] : { std::pair { &v.env, &envs.env[0] }, { &v.env2, &envs.env[1] }, { &v.env3, &envs.env[2] },
+                           { &v.commonEnv2, &bp.envs.env[1] }, { &v.commonEnv3, &bp.envs.env[2] } })
     {
         env->setSampleRate (sampleRate);
         env->setParameters (*p);
@@ -928,11 +942,15 @@ void SamplerEngine::stretchFrame (Voice& v, const SampleData& s, bool stereo, fl
 
 void SamplerEngine::startModulation (Voice& v)
 {
-    v.env1Value = v.env2Value = v.env3Value = 0;
+    v.env1Value = v.env2Value = v.env3Value = v.commonEnv2Value = v.commonEnv3Value = 0;
     v.age = 0;
     v.samplesSinceMod = 0;
+    const auto& lfos = lfosOf (*v.layer);
     for (size_t i = 0; i < 4; ++i)
-        v.lfos[i] = { (double) bp.lfo[i].phase, 0.0f, random.nextFloat() * 2.0f - 1.0f };
+    {
+        v.lfos[i] = { (double) lfos.lfo[i].phase, 0.0f, random.nextFloat() * 2.0f - 1.0f };
+        v.commonLfos[i] = { (double) bp.lfos.lfo[i].phase, 0.0f, random.nextFloat() * 2.0f - 1.0f };
+    }
     v.filter.reset();
     v.filterFresh = true;
     updateModulation (v, 0);
@@ -940,21 +958,29 @@ void SamplerEngine::startModulation (Voice& v)
 
 void SamplerEngine::updateModulation (Voice& v, int rampSamples)
 {
-    // LFOs: free-running per voice from the note start, with a fade-in
+    // LFOs: free-running per voice from the note start, with a fade-in. The layer's own (or the
+    // instrument's), and the instrument's separately when the layer has its own.
     const auto elapsed = (double) v.samplesSinceMod;
     v.samplesSinceMod = 0;
-    for (size_t i = 0; i < 4; ++i)
+    auto runLfos = [&] (const LayerLfos& set, Voice::LfoState* states)
     {
-        const auto& p = bp.lfo[i];
-        auto& st = v.lfos[i];
-        const auto before = st.phase;
-        st.phase += p.rate * elapsed / sampleRate;
-        if (std::floor (st.phase) != std::floor (before))
-            st.held = random.nextFloat() * 2.0f - 1.0f;
-        const auto u = (float) (st.phase - std::floor (st.phase));
-        const auto fade = p.fadeMs > 0 ? (float) juce::jmin (1.0, v.age / (p.fadeMs * 0.001 * sampleRate)) : 1.0f;
-        st.value = lfoShape (p.shape, u, st.held) * p.depth * fade;
-    }
+        for (size_t i = 0; i < 4; ++i)
+        {
+            const auto& p = set.lfo[i];
+            auto& st = states[i];
+            const auto before = st.phase;
+            st.phase += p.rate * elapsed / sampleRate;
+            if (std::floor (st.phase) != std::floor (before))
+                st.held = random.nextFloat() * 2.0f - 1.0f;
+            const auto u = (float) (st.phase - std::floor (st.phase));
+            const auto fade = p.fadeMs > 0 ? (float) juce::jmin (1.0, v.age / (p.fadeMs * 0.001 * sampleRate)) : 1.0f;
+            st.value = lfoShape (p.shape, u, st.held) * p.depth * fade;
+        }
+    };
+    const bool ownLfos = v.layer->lfos.own, ownEnvs = v.layer->envs.own;
+    runLfos (lfosOf (*v.layer), v.lfos);
+    if (ownLfos)
+        runLfos (bp.lfos, v.commonLfos);
 
     // Sum the routes into each target: global part (this block) + this voice's sources
     std::array<float, Mod::numTargets> mod = globalMod;
@@ -966,9 +992,18 @@ void SamplerEngine::updateModulation (Voice& v, int rampSamples)
         source[(size_t) (Mod::lfo1 + i)] = v.lfos[i].value;
     source[Mod::velocity] = (float) v.velocity / 127.0f;
     source[Mod::key] = (float) (v.note - 60) / 60.0f;
+    source[Mod::cenv2] = ownEnvs ? v.commonEnv2Value : v.env2Value;
+    source[Mod::cenv3] = ownEnvs ? v.commonEnv3Value : v.env3Value;
+    for (int i = 0; i < 4; ++i)
+        source[(size_t) (Mod::clfo1 + i)] = ownLfos ? v.commonLfos[i].value : v.lfos[i].value;
     for (const auto& r : v.map->routes)
         if (! Mod::isGlobal (r.source) && r.target >= 0)
             mod[(size_t) r.target] += source[(size_t) r.source] * r.amount;
+    // This layer's own routes (global sources use this block's values)
+    for (int k = Mod::macro1; k <= Mod::aftertouch; ++k)
+        source[(size_t) k] = globalSource[(size_t) k];
+    for (const auto& r : v.layer->routes)
+        mod[(size_t) r.target] += source[(size_t) r.source] * r.amount;
 
     v.pitchMod = mod[Mod::pitch] * pitchRangeSemis;
     v.volumeMod = juce::jlimit (0.0f, 4.0f, 1.0f + mod[Mod::volume]);
@@ -983,23 +1018,25 @@ void SamplerEngine::updateModulation (Voice& v, int rampSamples)
     v.grainSpray = juce::jlimit (0.0f, 1.0f, eng.grnSpray + mod[Mod::grainSpray]);
     v.grainPitchRnd = juce::jmax (0.0f, eng.grnPitchRnd + mod[Mod::grainPitchRnd] * grainPitchRndRange);
 
-    // Filter: the knobs (smoothed, in octaves), Env 2 through Env Amt, plus routed modulation
-    const auto knobOct = std::log2 (juce::jmax (20.0f, bp.cutoff));
+    // Filter (the layer's own or the instrument's): the knobs (smoothed, in octaves), Env 2 through
+    // Env Amt, plus routed modulation
+    const auto& flt = filterOf (*v.layer);
+    const auto knobOct = std::log2 (juce::jmax (20.0f, flt.cutoff));
     if (v.filterFresh)
     {
         v.cutoffOct = knobOct;
-        v.resoSmoothed = bp.reso;
+        v.resoSmoothed = flt.reso;
         v.filterFresh = false;
     }
     else
     {
         const auto a = 1.0f - std::exp (-(float) juce::jmax (1, rampSamples) / (0.01f * (float) sampleRate));
         v.cutoffOct += a * (knobOct - v.cutoffOct);
-        v.resoSmoothed += a * (bp.reso - v.resoSmoothed);
+        v.resoSmoothed += a * (flt.reso - v.resoSmoothed);
     }
-    const auto octaves = v.cutoffOct + v.env2Value * bp.envAmt * envAmtOctaves + mod[Mod::cutoff] * cutoffRangeOctaves;
-    v.filter.setTargets (bp.fltType, std::exp2 (octaves), v.resoSmoothed + mod[Mod::reso],
-                         bp.driveDb + mod[Mod::drive] * driveRangeDb, rampSamples);
+    const auto octaves = v.cutoffOct + v.env2Value * flt.envAmt * envAmtOctaves + mod[Mod::cutoff] * cutoffRangeOctaves;
+    v.filter.setTargets (flt.type, std::exp2 (octaves), v.resoSmoothed + mod[Mod::reso],
+                         flt.driveDb + mod[Mod::drive] * driveRangeDb, rampSamples);
 }
 
 void SamplerEngine::renderVoice (Voice& v, int start, int num)
@@ -1175,6 +1212,11 @@ void SamplerEngine::renderVoice (Voice& v, int start, int num)
 
         v.env2Value = v.env2.getNextSample();
         v.env3Value = v.env3.getNextSample();
+        if (v.layer->envs.own)
+        {
+            v.commonEnv2Value = v.commonEnv2.getNextSample();
+            v.commonEnv3Value = v.commonEnv3.getNextSample();
+        }
         ++v.samplesSinceMod;
         v.age += 1.0;
 

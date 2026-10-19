@@ -26,6 +26,9 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 // A "samples" entry is a file name or { file, start, end, loopStart, loopEnd }
 export const fileOf = (entry) => (entry && typeof entry === 'object' ? entry.file : entry) || '';
 export const baseName = (entry) => String(fileOf(entry)).split(/[\\/]/).pop();
+// Which settings a layer has its own copy of, for the OWN badge's tooltip ('' = none)
+const ownList = (l) => [['engine', 'sample settings'], ['filter', 'filter'], ['envs', 'envelopes'], ['lfos', 'LFOs']]
+  .filter(([k]) => l[k] && l[k].own).map(([, n]) => n).join(', ');
 
 export function setupLayers(bridge, ui) {
   let inst = bridge.getInstrument();
@@ -64,7 +67,7 @@ export function setupLayers(bridge, ui) {
       row.innerHTML =
         `<button class="pick" aria-pressed="${i === sel}"><span class="badge">${String(i + 1).padStart(2, '0')}</span>` +
         `<span class="txt"><b></b><span class="meta" style="font-size:10px">${noteName(l.lo)}–${noteName(l.hi)} · v${l.vlo}–${l.vhi}</span></span></button>` +
-        `${l.engine && l.engine.own ? '<span class="own-badge" title="Has its own sample settings">OWN</span>' : ''}` +
+        `${ownList(l) ? `<span class="own-badge" title="Has its own ${ownList(l)}">OWN</span>` : ''}` +
         `<span class="meta" style="font-size:10px">${l.samples.length > 1 ? 'RR×' + l.samples.length : ''}</span>` +
         `<button class="ms" aria-label="Mute ${l.name}" aria-pressed="${!!l.muted}">M</button>` +
         `<button class="ms solo" aria-label="Solo ${l.name}" aria-pressed="${!!l.solo}">S</button>`;

@@ -37,6 +37,56 @@ struct LayerEngine
     bool grnFreeze = false;
 };
 
+// Modulation routing (the "modRoutes" list in the instrument JSON).
+namespace Mod
+{
+    // Sources. Global ones (macros, wheel, aftertouch) are the same for every voice. Every source can
+    // modulate the voice targets below (per note) and any float parameter ("param:<id>"); a
+    // per-voice source moving a parameter uses the most recently started note.
+    // env1–3 and lfo1–4 are the playing layer's own modulators when it has them, otherwise the
+    // instrument's; cenv2/cenv3 and clfo1–4 ("common") are always the instrument's.
+    enum Source { env2, env3, lfo1, lfo2, lfo3, lfo4, macro1, macro2, macro3, macro4, modWheel, aftertouch, velocity, key, env1,
+                  cenv2, cenv3, clfo1, clfo2, clfo3, clfo4, numSources };
+    inline constexpr const char* sourceIds[] = { "env2", "env3", "lfo1", "lfo2", "lfo3", "lfo4", "macro1", "macro2", "macro3", "macro4",
+                                                 "modwheel", "aftertouch", "velocity", "key", "env1",
+                                                 "cenv2", "cenv3", "clfo1", "clfo2", "clfo3", "clfo4" };
+    inline bool isGlobal (int s) noexcept { return s >= macro1 && s <= aftertouch; }
+
+    // Per-voice targets. What 100 % means for each is in docs/ui-spec.md (Modulation).
+    enum Target { pitch, volume, pan, cutoff, reso, drive, grainPos, grainSize, grainDensity, grainSpray, grainPitchRnd, start, numTargets };
+    inline constexpr const char* targetIds[] = { "pitch", "volume", "pan", "cutoff", "reso", "drive", "grain_pos", "grain_size",
+                                                 "grain_density", "grain_spray", "grain_pitchrnd", "start" };
+}
+
+struct ModRoute
+{
+    int source = 0;
+    int target = -1;     // Mod::Target, or -1 when it modulates a parameter
+    int param = -1;      // index into the engine's parameter list ("param:<id>" targets, any source)
+    float amount = 0;    // -1 … 1
+};
+
+// Filter, envelopes and LFOs: the instrument's (common) settings, or a layer's own copy
+// ("filter", "envs", "lfos" in its JSON, each with "own": true). Values in the engine's units.
+struct LayerFilter
+{
+    bool own = false;
+    int type = 1;                           // 0 LP24, 1 LP12, 2 BP, 3 HP, 4 Comb
+    float cutoff = 20000, reso = 0, driveDb = 0, envAmt = 0;   // reso and envAmt as fractions
+};
+
+struct LayerEnvs
+{
+    bool own = false;
+    juce::ADSR::Parameters env[3] {};       // Env 1 (amp), Env 2 (filter), Env 3 (mod); sustain 0–1
+};
+
+struct LayerLfos
+{
+    bool own = false;
+    struct Lfo { int shape = 0; float rate = 1, depth = 0, phase = 0, fadeMs = 0; } lfo[4];   // depth 0–1, phase in cycles
+};
+
 struct Layer
 {
     enum class RRMode { off, cycle, random, noRepeat };
@@ -79,6 +129,10 @@ struct Layer
 
     float normalizeGain = 1.0f;             // "normalize": true brings the loudest sample to 0 dBFS
     LayerEngine engine;                     // used when engine.own; otherwise the instrument's knobs
+    LayerFilter filter;                     // likewise for the filter…
+    LayerEnvs envs;                         // …the envelopes…
+    LayerLfos lfos;                         // …and the LFOs
+    std::vector<ModRoute> routes;       // this layer's own routes (voice targets only), on top of the instrument's
 
     int keyswitch = -1;                     // MIDI note, -1 = always active
     int articulation = -1;                  // index of the articulation name, -1 = none
@@ -87,31 +141,6 @@ struct Layer
     bool covers (int note, int velocity) const noexcept;
     // Equal-power crossfade gain for a note/velocity (1 inside the range, 0 outside the fades).
     float zoneGain (int note, int velocity) const noexcept;
-};
-
-// Modulation routing (the "modRoutes" list in the instrument JSON).
-namespace Mod
-{
-    // Sources. Global ones (macros, wheel, aftertouch) are the same for every voice. Every source can
-    // modulate the voice targets below (per note) and any float parameter ("param:<id>"); a
-    // per-voice source moving a parameter uses the most recently started note.
-    enum Source { env2, env3, lfo1, lfo2, lfo3, lfo4, macro1, macro2, macro3, macro4, modWheel, aftertouch, velocity, key, env1, numSources };
-    inline constexpr const char* sourceIds[] = { "env2", "env3", "lfo1", "lfo2", "lfo3", "lfo4", "macro1", "macro2", "macro3", "macro4",
-                                                 "modwheel", "aftertouch", "velocity", "key", "env1" };
-    inline bool isGlobal (int s) noexcept { return s >= macro1 && s <= aftertouch; }
-
-    // Per-voice targets. What 100 % means for each is in docs/ui-spec.md (Modulation).
-    enum Target { pitch, volume, pan, cutoff, reso, drive, grainPos, grainSize, grainDensity, grainSpray, grainPitchRnd, start, numTargets };
-    inline constexpr const char* targetIds[] = { "pitch", "volume", "pan", "cutoff", "reso", "drive", "grain_pos", "grain_size",
-                                                 "grain_density", "grain_spray", "grain_pitchrnd", "start" };
-}
-
-struct ModRoute
-{
-    int source = 0;
-    int target = -1;     // Mod::Target, or -1 when it modulates a parameter
-    int param = -1;      // index into the engine's parameter list ("param:<id>" targets, any source)
-    float amount = 0;    // -1 … 1
 };
 
 struct InstrumentMap

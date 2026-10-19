@@ -129,6 +129,10 @@ private:
         juce::ADSR env2, env3;
         float env1Value = 0, env2Value = 0, env3Value = 0;
         struct LfoState { double phase = 0; float value = 0, held = 0; } lfos[4];
+        // The instrument's (common) LFOs and Env 2/3, run separately when the layer has its own
+        LfoState commonLfos[4];
+        juce::ADSR commonEnv2, commonEnv3;
+        float commonEnv2Value = 0, commonEnv3Value = 0;
         double age = 0;                  // samples since the note started (LFO fade-in)
         int samplesSinceMod = 0;
         float pitchMod = 0, volumeMod = 1, panModL = 1, panModR = 1, startMod = 0;
@@ -146,12 +150,11 @@ private:
     // Parameter values read once per block (already modulated by the global sources)
     struct BlockParams
     {
-        LayerEngine engine;              // the instrument's sample-engine knobs (layers can have their own)
-        juce::ADSR::Parameters env, env2, env3;
-
-        int fltType = 1;
-        float cutoff = 20000, reso = 0, driveDb = 0, envAmt = 0;
-        struct Lfo { int shape = 0; float rate = 1, depth = 0, phase = 0, fadeMs = 0; } lfo[4];
+        // The instrument's (common) settings; layers can have their own of each
+        LayerEngine engine;
+        LayerFilter filter;
+        LayerEnvs envs;
+        LayerLfos lfos;
     };
 
     // Indices of the parameters the engine reads (-1 when missing)
@@ -168,6 +171,9 @@ private:
     void readBlockParams();
     // The sample-engine settings a voice uses: its layer's own, or the instrument's
     const LayerEngine& engineOf (const Layer& l) const noexcept { return l.engine.own ? l.engine : bp.engine; }
+    const LayerFilter& filterOf (const Layer& l) const noexcept { return l.filter.own ? l.filter : bp.filter; }
+    const LayerEnvs& envsOf (const Layer& l) const noexcept     { return l.envs.own ? l.envs : bp.envs; }
+    const LayerLfos& lfosOf (const Layer& l) const noexcept     { return l.lfos.own ? l.lfos : bp.lfos; }
 
     // ---- events ----
     void handleMidi (const juce::MidiMessage&);
@@ -209,6 +215,7 @@ private:
     Ix ix {};
     std::vector<float> paramOffset;                   // global modulation per parameter (normalised)
     std::array<float, Mod::numTargets> globalMod {};  // global modulation of the voice targets
+    std::array<float, Mod::numSources> globalSource {}; // this block's macros, wheel and aftertouch (for layer routes)
     BlockParams bp;
     double sampleRate = 44100.0;
 

@@ -490,3 +490,13 @@ td.grp { font-family: var(--font); font-size: 12px; color: var(--muted); }
 /* ---------- per-layer engine settings ---------- */
 .own-toggle { height: 24px; flex-shrink: 0; }
 .own-badge { font-family: var(--mono); font-size: 9px; color: var(--mod); border: 1px solid var(--mod); border-radius: 3px; padding: 0 3px; }
+.own-mini { position: absolute; top: 4px; right: 4px; z-index: 2; height: 18px; padding: 0 6px; font-size: 9px; letter-spacing: .1em; }
+.own-mini[aria-pressed="false"] { opacity: .75; }
+
+/* route popovers: All layers / This layer */
+.route-sec { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
+.route-sec + .route-sec { border-top: 1px solid var(--line); padding-top: 8px; }
+.route-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.route-sec-head b { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+.route-sec-head .meta { white-space: normal; text-align: right; }
+.add-route { align-self: flex-start; }

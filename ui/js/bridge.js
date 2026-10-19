@@ -79,20 +79,28 @@ class JuceParam {
   }
 }
 
-// ---------- per-layer engine settings ----------
-// These knobs can belong to the selected layer ("Own settings": layer.engine = { own: true, <id>: value })
-// instead of the instrument. bridge.param(id) returns this wrapper for them, so every control and display
-// follows the selected layer without knowing about it. The layer's values are saved in the instrument.
+// ---------- per-layer settings ----------
+// These knobs can belong to the selected layer instead of the instrument, in four groups, each stored on
+// the layer as { own: true, <id>: value }: "engine" (sample + granular), "filter", "envs" and "lfos".
+// bridge.param(id) returns this wrapper for them, so every control and display follows the selected
+// layer without knowing about it. The layer's values are saved in the instrument.
 export const ENGINE_IDS = ['play_mode', 'stretch_mode', 'time_speed', 'formant', 'tune', 'fine', 'loop_xfade',
   'grn_pos', 'grn_size', 'grn_density', 'grn_spray', 'grn_pitchrnd', 'grn_freeze'];
+const ADSR = ['attack', 'decay', 'sustain', 'release'], LFO = ['shape', 'rate', 'depth', 'phase', 'fade'];
+export const LAYER_GROUPS = {
+  engine: ENGINE_IDS,
+  filter: ['flt_type', 'flt_cutoff', 'flt_reso', 'flt_drive', 'flt_envamt'],
+  envs: [1, 2, 3].flatMap((n) => ADSR.map((k) => `env${n}_${k}`)),
+  lfos: [1, 2, 3, 4].flatMap((n) => LFO.map((k) => `lfo${n}_${k}`))
+};
 
 class ScopedParam {
-  constructor(spec, global, scope) { this.spec = spec; this.global = global; this.scope = scope; this.ev = new Emitter(); }
-  owner() { const l = this.scope.layer(); return l && l.engine && l.engine.own ? l : null; }
+  constructor(spec, global, scope, group) { this.spec = spec; this.global = global; this.scope = scope; this.group = group; this.ev = new Emitter(); }
+  owner() { const l = this.scope.layer(); return l && l[this.group] && l[this.group].own ? l : null; }
   getValue() {
     const l = this.owner();
     if (!l) return this.global.getValue();
-    const v = l.engine[this.spec.id];
+    const v = l[this.group][this.spec.id];
     return v === undefined ? this.global.getValue() : v;
   }
   getNorm() { return this.owner() ? toNorm(this.spec, this.getValue()) : this.global.getNorm(); }
@@ -100,8 +108,8 @@ class ScopedParam {
   setValue(v) {
     const l = this.owner();
     if (!l) { this.global.setValue(v); return; }
-    if (l.engine[this.spec.id] === v) return;
-    l.engine[this.spec.id] = v;
+    if (l[this.group][this.spec.id] === v) return;
+    l[this.group][this.spec.id] = v;
     this.scope.changed();
     this.ev.emit(v);
   }
@@ -133,7 +141,8 @@ export async function createBridge() {
     changed: () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => api.setInstrument(JSON.parse(JSON.stringify(instrument))), 120); }
   };
   const scoped = new Map();
-  for (const id of ENGINE_IDS) if (params.has(id)) scoped.set(id, new ScopedParam(params.get(id).spec, params.get(id), scope));
+  for (const [group, ids] of Object.entries(LAYER_GROUPS))
+    for (const id of ids) if (params.has(id)) scoped.set(id, new ScopedParam(params.get(id).spec, params.get(id), scope, group));
 
   const layersEv = new Emitter();
   const recStateEv = new Emitter();

@@ -135,6 +135,12 @@ All of them run at double the sample rate, and fast cutoff moves glide instead o
 
 Each note gets its own LFOs, starting when the note does.
 
+### Per-layer filter, envelopes and LFOs
+
+The Filter, Env and LFO panels each have a **Layer** switch in the top-right corner of their display. Off (the default), the selected layer uses the instrument's filter / envelopes / LFOs, shared by every layer ("common"). On, it gets its own copy, starting from the current values, and that panel edits just that layer. Turning it off keeps the copy for later. Layers with anything of their own show an **OWN** badge in the layer list (hover it to see what).
+
+So one layer can have a dark, slowly opening filter while another stays bright, or each layer can wobble at its own LFO rate. The effects and the macros are always shared by the whole instrument.
+
 ### Modulation: choosing what moves what
 
 The tag at the right of the Env and LFO panels shows where that envelope or LFO goes, for example **→ Grain Pos +50%**. Click it to change it:
@@ -174,6 +180,9 @@ The matrix also has sources without a panel of their own:
 - **Mod wheel** and **Aftertouch** from your keyboard.
 - **Velocity**: how hard you play.
 - **Key track (pitch)**: how far the note is above or below C3, for things like brighter high notes or shorter grains up the keyboard.
+- **Common LFO 1–4** and **Common Env 2–3**: always the instrument's own LFOs and envelopes, even in a layer that has its own. Plain **LFO 1** / **Env 2** mean the playing layer's own when it has them, otherwise the common ones. That way a layer with its own LFOs can still follow a shared vibrato.
+
+**All layers / This layer.** Every route list has two parts. **All layers** routes apply to every layer (they can target any knob). **This layer** routes are extra routes for the selected layer only, to the voice targets (pitch, volume, pan, cutoff, resonance, drive, grain settings, sample start). The popovers show both; the Mod matrix has a switch between them.
 
 For a knob, 100 % sweeps its whole range. **Reset to defaults** brings back the starting routing.
 
